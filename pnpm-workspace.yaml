@@ -1,0 +1,4 @@
+packages:
+  - '.'
+  - 'vendor/fiscal/packages/*'
+  - 'vendor/fiscal/apps/api'

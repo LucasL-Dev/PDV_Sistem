@@ -2,7 +2,37 @@
 
 Aplicativo desktop Electron + React, com banco SQLite local e emissor NFC-e embutido do [Sull-s/fiscal](https://github.com/Sull-s/fiscal).
 
-## Executar no Windows — passo a passo
+## Instalar no Windows — sem comandos
+
+Use Windows 10 ou 11 de 64 bits (x64). **Quem instala o aplicativo não precisa de Node.js, Git ou pnpm.**
+
+1. Abra [Instalador Windows no GitHub Actions](https://github.com/LucasL-Dev/PDV_Sistem/actions/workflows/windows.yml) e entre na sua conta do GitHub.
+2. Abra a execução mais recente com **✓ verde**. Ao fim da página, em **Artifacts**, baixe **Instalador-Windows**. Se a execução estiver em andamento, aguarde a conclusão; um build com falha não disponibiliza o instalador.
+3. Clique com o botão direito no ZIP baixado e selecione **Extrair tudo**.
+4. Abra `PDV-Sistem-Setup-1.1.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
+5. O aplicativo abre ao terminar. Nas próximas vezes, use o atalho **PDV Sistem** na Área de Trabalho ou no menu Iniciar.
+6. No primeiro acesso, crie o administrador. Cadastre seus produtos e clique em **Abrir caixa** para começar.
+
+Quando houver uma versão publicada em [Releases](https://github.com/LucasL-Dev/PDV_Sistem/releases), você também poderá baixar o `.exe` diretamente por lá, sem o ZIP dos artefatos. O workflow publica Releases quando uma tag `v*` é enviada; um push em `main` gera o artefato de teste. Os artefatos ficam disponíveis por 90 dias. Se não houver execução, o responsável pelo repositório pode abrir **Actions → Instalador Windows → Run workflow**.
+
+O instalador ainda não tem assinatura digital e o Windows pode mostrar um aviso de editor desconhecido. Não desative as proteções do sistema. O arquivo `.sha256` acompanha o `.exe` para conferência de integridade. Os testes do workflow conferem o aplicativo em Windows, mas impressão, hardware do caixa e emissão real precisam ser validados na loja.
+
+### Atualizar sem reinstalar ferramentas
+
+Feche o PDV, faça backup e execute o instalador da nova versão. Ele reutiliza a instalação do usuário; o banco local e os dados fiscais ficam separados dos arquivos do aplicativo. A desinstalação não apaga os dados da loja. Não há atualizador automático nesta versão.
+
+### Interface simplificada
+
+- **Frente de caixa:** catálogo compacto e carrinho. Clique em **Ir para pagamento** para informar o recebimento e concluir, sem misturar as duas etapas.
+- **Cliente e desconto:** expanda essa seção somente quando precisar.
+- **Gerenciar caixa:** abre sangria, suprimento e fechamento em uma janela separada.
+- **Cadastros:** os formulários ficam recolhidos; clique em Novo produto, Novo cliente ou Adicionar funcionário. Editar um registro abre o formulário automaticamente.
+- **Dados fiscais:** ficam em uma seção própria dentro do cadastro do produto. Vendas, devoluções, clientes, relatórios, equipe e documentos fiscais continuam no menu lateral.
+
+<details>
+<summary><strong>Sou desenvolvedor: executar pelo código e gerar instaladores</strong></summary>
+
+### Executar a partir do código no Windows
 
 Este tutorial abre o aplicativo a partir do código publicado neste repositório. **Não é necessário baixar o ZIP de Windows mostrado anteriormente na conversa**: ele não está publicado no GitHub. A pasta `release/` é gerada localmente e não faz parte do código versionado.
 
@@ -87,7 +117,7 @@ Depois de concluir a primeira instalação, para abrir novamente basta entrar na
 2. Abra **Produtos e estoque** e cadastre nome, código de barras/SKU, categoria, preço e estoque inicial.
 3. Se desejar, cadastre os clientes em **Clientes** e os operadores em **Funcionários**.
 4. Entre em **Frente de caixa**, informe o fundo inicial e clique em **Abrir caixa**.
-5. Selecione os produtos, informe o pagamento e clique em **Concluir venda**.
+5. Selecione os produtos e clique em **Ir para pagamento**. Informe o recebimento e clique em **Concluir venda**.
 6. Em **Vendas e devoluções**, consulte a venda e imprima o recibo. O recibo interno é **não fiscal**.
 7. No fechamento, informe o dinheiro contado e clique em **Fechar caixa**, usando o administrador.
 
@@ -110,7 +140,7 @@ Esse comando cria uma versão de desenvolvimento **sem assinatura digital**, sem
 Ao finalizar, procure:
 
 ```text
-release\PDV Sistem Setup 1.0.0.exe
+release\PDV-Sistem-Setup-1.1.0-x64.exe
 ```
 
 Abra esse arquivo para instalar no Windows e use o atalho criado pelo instalador. O computador que apenas executa o aplicativo instalado não precisa de Node.js nem Git. Para distribuir oficialmente, configure assinatura de código e teste o instalador em Windows; não use a opção `signAndEditExecutable=false` como substituto da assinatura.
@@ -143,7 +173,7 @@ Se o Git informar alterações locais ou conflito, preserve seu trabalho antes d
 | Arquivo de instalador não aparece | Confira se o comando de empacotamento terminou sem erro. Gerar o instalador no Linux pode exigir Wine; este tutorial utiliza Windows. |
 | Emissão fiscal bloqueada | Configure os dados da empresa, A1, CSC e códigos fiscais com o contador; teste em homologação. |
 
-Os testes do caixa, o build e o fluxo Electron foram validados em Linux. O pacote Windows x64 foi preparado, mas **a execução e a instalação em um Windows real ainda precisam ser validadas**. Ao relatar um problema, informe a versão do Windows, o comando executado e a mensagem de erro, sem enviar senhas, certificados ou dados de clientes.
+Os testes do caixa, o build e o fluxo Electron foram validados em Linux. O workflow Windows executa testes da interface e do aplicativo empacotado antes de disponibilizar o instalador; só considere uma execução validada quando ela estiver verde. A instalação interativa e o uso com o hardware da loja ainda precisam ser conferidos. Ao relatar um problema, informe a versão do Windows, o comando executado e a mensagem de erro, sem enviar senhas, certificados ou dados de clientes.
 
 ## Executar no Linux
 
@@ -155,6 +185,8 @@ node --use-env-proxy node_modules/electron/install.js
 npx --yes pnpm@9.15.0 build
 npx --yes pnpm@9.15.0 start
 ```
+
+</details>
 
 ## Funcionalidades
 

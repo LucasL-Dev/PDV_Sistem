@@ -1,0 +1,93 @@
+name: Instalador Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Testar e gerar instalador
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Baixar codigo
+        uses: actions/checkout@v4
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Instalar pnpm
+        run: npm install --global pnpm@9.15.0
+      - name: Instalar dependencias
+        run: pnpm install --frozen-lockfile
+      - name: Instalar Electron
+        run: node node_modules/electron/install.js
+      - name: Testar regras do caixa
+        run: pnpm test
+      - name: Compilar aplicativo
+        run: pnpm build
+      - name: Testar interface no Windows
+        shell: pwsh
+        run: |
+          $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'pdv-smoke-source'
+          pnpm exec electron .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Gerar instalador
+        run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Testar aplicativo empacotado
+        shell: pwsh
+        run: |
+          $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'pdv-smoke-packaged'
+          $process = Start-Process -FilePath '.\release\win-unpacked\PDV Sistem.exe' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }
+      - name: Calcular SHA-256 do instalador
+        shell: pwsh
+        run: |
+          Get-ChildItem release/PDV-Sistem-Setup-*.exe | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Set-Content -Encoding ascii "$($_.FullName).sha256"
+          }
+      - name: Disponibilizar instalador
+        uses: actions/upload-artifact@v4
+        with:
+          name: Instalador-Windows
+          path: |
+            release/PDV-Sistem-Setup-*.exe
+            release/PDV-Sistem-Setup-*.exe.sha256
+          if-no-files-found: error
+          retention-days: 90
+      - name: Guardar captura do teste
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Captura-Windows
+          path: ${{ runner.temp }}/pdv-sistem.png
+          if-no-files-found: ignore
+
+  release:
+    name: Publicar versao marcada
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Instalador-Windows
+          path: installer
+      - name: Publicar instalador na versao
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release create "$RELEASE_TAG" installer/* --verify-tag --title "PDV Sistem $RELEASE_TAG" --generate-notes

@@ -1,6 +1,6 @@
 {
   "name": "pdv-sistem",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",
@@ -10,7 +10,8 @@
     "start": "electron .",
     "test": "node --test tests/*.test.mjs",
     "dist": "pnpm build && electron-builder",
-    "smoke": "electron --ozone-platform=headless --disable-gpu ."
+    "smoke": "electron --ozone-platform=headless --disable-gpu .",
+    "dist:win": "pnpm build && electron-builder --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@fiscal/agente": "workspace:*",
@@ -41,13 +42,24 @@
       "**/node_modules/pdfkit/**"
     ],
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "signAndEditExecutable": false,
+      "artifactName": "PDV-Sistem-Setup-${version}-${arch}.${ext}"
     },
     "linux": {
       "target": "AppImage"
     },
     "directories": {
       "output": "release"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "allowElevation": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": false
     }
   },
   "description": "PDV desktop com caixa, estoque, clientes e NFC-e",

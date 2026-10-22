@@ -11,7 +11,7 @@ Use Windows 10 ou 11 de 64 bits (x64). **Quem instala o aplicativo não precisa 
 1. Abra [Instalador Windows no GitHub Actions](https://github.com/LucasL-Dev/PDV_Sistem/actions/workflows/windows.yml) e entre na sua conta do GitHub.
 2. Abra a execução mais recente com **✓ verde**. Ao fim da página, em **Artifacts**, baixe **Instalador-Windows**. Se a execução estiver em andamento, aguarde a conclusão; um build com falha não disponibiliza o instalador.
 3. Clique com o botão direito no ZIP baixado e selecione **Extrair tudo**.
-4. Abra `OmniPDV-Setup-1.2.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
+4. Abra `OmniPDV-Setup-1.3.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
 5. O aplicativo abre ao terminar. Nas próximas vezes, use o atalho **OmniPDV** na Área de Trabalho ou no menu Iniciar.
 6. No primeiro acesso, crie o administrador. Cadastre seus produtos e clique em **Abrir caixa** para começar.
 
@@ -142,7 +142,7 @@ Esse comando cria uma versão de desenvolvimento **sem assinatura digital**, com
 Ao finalizar, procure:
 
 ```text
-release\OmniPDV-Setup-1.2.0-x64.exe
+release\OmniPDV-Setup-1.3.0-x64.exe
 ```
 
 Abra esse arquivo para instalar no Windows e use o atalho criado pelo instalador. O computador que apenas executa o aplicativo instalado não precisa de Node.js nem Git. Para distribuir oficialmente, configure assinatura de código e teste o instalador em Windows; a opção `signExecutable=false` permite personalizar nome e ícone, mas não substitui a assinatura digital.
@@ -246,3 +246,13 @@ Dentro de contêineres sem sandbox Linux disponível, a conferência automatizad
 ## Limites atuais
 
 Aplicativo de uma loja/um computador, sem sincronização multi-terminal, estoque fracionário ou hardware fiscal específico. O banco guarda o estado em um documento transacional SQLite: adequado para a primeira versão local; grandes históricos precisam de migração para tabelas normalizadas e paginação. Não há conta de demonstração ou produtos fictícios na instalação real.
+
+## Exclusões e mensagens de erro (1.3.0)
+
+As mensagens mostram apenas o erro de negócio, como “Usuário ou senha incorretos.”.
+
+Administradores podem excluir produtos e funcionários pelo botão **Excluir** de cada cadastro. Não é possível excluir o próprio usuário. O produto sai do catálogo e o funcionário perde o acesso; ambos continuam identificáveis no histórico.
+
+Em **Vendas e devoluções**, selecione uma venda e use **Excluir venda**, ou **Excluir vendas do dia** para o dia atual. Confirme na janela que aparece. Os itens ainda não devolvidos voltam ao estoque, e os totais do caixa e relatórios são recalculados. Vendas de caixa já fechado e documentos fiscais ainda não regularizados bloqueiam a exclusão; o lote inteiro é validado antes de qualquer alteração. Cancelamentos/rejeições fiscais não apagam XMLs. Nenhuma dessas opções estorna Pix ou cartão no provedor.
+
+A exclusão remove os registros das telas operacionais, mantendo-os arquivados com autor e data para auditoria e integridade dos vínculos. IDs e números de vendas não são reutilizados.

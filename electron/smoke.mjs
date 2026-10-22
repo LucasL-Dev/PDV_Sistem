@@ -30,10 +30,17 @@ export async function smoke(win) {
   );
   await until("document.body.innerText.includes('Catálogo de produtos')");
   await js(
-    `(async()=>{await window.pdv.call('login',{login:'admin',password:'smoke-password'});const products=[['Café especial','Bebidas',2490],['Chocolate 70%','Doces',1290],['Caderno pontilhado','Papelaria',3590],['Caneca cerâmica','Casa',4590],['Chá de camomila','Bebidas',1690],['Biscoito artesanal','Alimentos',1890]];for(let i=0;i<products.length;i++)await window.pdv.call('product',{name:products[i][0],barcode:'789000'+i,category:products[i][1],price:products[i][2],stock:20});await window.pdv.call('customer',{name:'Maria Silva',phone:'11999990000'});await window.pdv.call('openShift',{opening:10000});})()`,
+    `(async()=>{await window.pdv.call('login',{login:'admin',password:'smoke-password'});const products=[['Café especial','Bebidas',2490],['Chocolate 70%','Doces',1290],['Caderno pontilhado','Papelaria',3590],['Caneca cerâmica','Casa',4590],['Chá de camomila','Bebidas',1690],['Biscoito artesanal','Alimentos',1890]];for(let i=0;i<products.length;i++)await window.pdv.call('product',{name:products[i][0],barcode:'789000'+i,category:products[i][1],price:products[i][2],stock:20});await window.pdv.call('customer',{name:'Maria Silva',phone:'11999990000'});await window.pdv.call('employee',{name:'Funcionário temporário',login:'temporario',password:'smoke-password',role:'cashier',active:true});await window.pdv.call('openShift',{opening:10000});})()`,
   );
   await click("Sair da conta");
   await until("document.body.innerText.includes('Bem-vindo de volta')");
+  const loginError = await js(
+    "window.pdv.call('login',{login:'admin',password:'senha-errada'}).then(()=>null,e=>e.message)",
+  );
+  if (loginError !== "Usuário ou senha incorretos.")
+    throw Error(
+      "Mensagem de erro contém detalhes do transporte: " + loginError,
+    );
   // Enter through the actual login form, exercising React and the preload bridge.
   await js(
     `(()=>{const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;for(const [name,value] of [['login','admin'],['password','smoke-password']]){const input=document.querySelector('[name="'+name+'"]');set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));}document.querySelector('form').requestSubmit();})()`,
@@ -87,6 +94,49 @@ export async function smoke(win) {
   await until("document.querySelector('.tax-fields').open");
   await click("Funcionários");
   await until("document.body.innerText.includes('Adicionar funcionário')");
+  // Exclusões pela interface: cancelar deve preservar, confirmar deve remover.
+  await until(
+    "Boolean(document.querySelector('[aria-label=\"Excluir funcionário Funcionário temporário\"]'))",
+  );
+  await js(
+    "document.querySelector('[aria-label=\"Excluir funcionário Funcionário temporário\"]').click()",
+  );
+  await until("Boolean(document.querySelector('dialog[open]'))");
+  await click("Confirmar exclusão");
+  await until(
+    "!document.querySelector('[aria-label=\"Excluir funcionário Funcionário temporário\"]')",
+  );
+  await click("Produtos e estoque");
+  await js(
+    "document.querySelector('[aria-label=\"Excluir produto Café especial\"]').click()",
+  );
+  await until("Boolean(document.querySelector('dialog[open]'))");
+  await click("Voltar");
+  if (
+    !(await js(
+      "Boolean(document.querySelector('[aria-label=\"Excluir produto Café especial\"]'))",
+    ))
+  )
+    throw Error("Cancelar excluiu o produto.");
+  await js(
+    "document.querySelector('[aria-label=\"Excluir produto Café especial\"]').click()",
+  );
+  await until("Boolean(document.querySelector('dialog[open]'))");
+  await click("Confirmar exclusão");
+  await until(
+    "!document.querySelector('[aria-label=\"Excluir produto Café especial\"]')",
+  );
+  await click("Vendas e devoluções");
+  await click("Excluir vendas do dia");
+  await until("Boolean(document.querySelector('dialog[open]'))");
+  await click("Confirmar exclusão");
+  await until("!document.querySelector('dialog[open]')");
+  const deleted = await js("window.pdv.call('snapshot')");
+  if (
+    deleted.sales.length !== 0 ||
+    deleted.products.find((p) => p.name === "Chocolate 70%").stock !== 20
+  )
+    throw Error("Exclusão diária não restaurou estoque/relatório.");
   await click("Documentos fiscais");
   await until(
     "document.body.innerText.includes('cofre de senhas') || document.body.innerText.includes('Empresa') || document.body.innerText.includes('Configurar emissor')",

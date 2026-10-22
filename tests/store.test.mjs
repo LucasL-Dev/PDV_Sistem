@@ -1,14 +1,340 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import {Store} from '../electron/store.mjs';
-function setup(){const s=new Store(':memory:');s.call('bootstrap',{name:'Admin',login:'admin',password:'test-password'});const p=s.call('product',{name:'Café',barcode:'789',category:'Alimentos',price:1099,stock:10});s.call('openShift',{opening:10000});return {s,p};}
-function sale(s,p,extra={}){return s.call('sale',{id:'sale-0000000000001',items:[{id:p.id,qty:2}],discount:198,payments:[{forma:'dinheiro',amount:3000}],...extra});}
-test('venda: preço confiável, desconto, troco, estoque e idempotência',()=>{const {s,p}=setup();const v=sale(s,p);assert.equal(v.total,2000);assert.equal(v.change,1000);assert.equal(s.read().products[0].stock,8);assert.equal(sale(s,p).id,v.id);assert.equal(s.read().products[0].stock,8);assert.equal(s.read().sales.length,1);s.close();});
-test('transação reverte venda sem estoque ou com pagamento inválido',()=>{const {s,p}=setup();assert.throws(()=>sale(s,p,{items:[{id:p.id,qty:11}]}),/Estoque/);assert.throws(()=>sale(s,p,{payments:[{forma:'pix',amount:3000}]}),/Troco/);assert.equal(s.read().products[0].stock,10);assert.equal(s.read().sales.length,0);s.close();});
-test('pagamento dividido e fechamento descontam apenas troco em dinheiro',()=>{const {s,p}=setup();sale(s,p,{payments:[{forma:'pix',amount:1000},{forma:'dinheiro',amount:1500}]});s.call('closeShift',{counted:11000});const c=s.read().shifts[0];assert.equal(c.expected,11000);assert.equal(c.counted,c.expected);assert.throws(()=>sale(s,p,{id:'sale-0000000000002'}),/Abra o caixa/);s.close();});
-test('devoluções parciais repõem estoque, rateiam desconto e impedem repetição',()=>{const {s,p}=setup();const v=sale(s,p);const r=s.call('return',{id:v.id,items:[{id:p.id,qty:1}],reason:'Produto devolvido',method:'dinheiro'});assert.equal(r.refund,1000);assert.equal(s.read().products[0].stock,9);s.call('return',{id:v.id,items:[{id:p.id,qty:1}],reason:'Produto devolvido',method:'pix'});assert.equal(s.read().products[0].stock,10);assert.throws(()=>s.call('return',{id:v.id,items:[{id:p.id,qty:1}],reason:'Novamente',method:'dinheiro'}),/saldo/);s.call('closeShift',{counted:11000});assert.equal(s.read().shifts[0].expected,11000);s.close();});
-test('permissões e autenticação são aplicadas no banco, sem hashes na tela',()=>{const {s,p}=setup();s.call('employee',{name:'Caixa',login:'caixa',password:'password123',role:'cashier',active:true});s.call('logout');assert.throws(()=>s.call('snapshot'),/Entre/);assert.throws(()=>s.call('login',{login:'caixa',password:'errada'}),/incorretos/);s.call('login',{login:'caixa',password:'password123'});assert.throws(()=>s.call('product',p),/administrador/);assert.throws(()=>s.call('closeShift',{counted:0}),/administrador/);assert.ok(s.call('snapshot').users.every(u=>!u.password));sale(s,p);s.close();});
-test('dados fiscais exigem códigos do contador e usam o snapshot da venda',()=>{const {s,p}=setup();const v=sale(s,p);assert.throws(()=>s.fiscalPayload(v.id),/contador/);s.call('product',{...p,ncm:'09012100',cfop:'5102',csosn:'102'});const v2=sale(s,p,{id:'sale-0000000000002'});const payload=s.fiscalPayload(v2.id);assert.equal(payload.venda.itens[0].valorUnitario,10.99);assert.equal(payload.referencia,v2.id);s.recordFiscal(v2.id,{situacao:'pendente'});assert.throws(()=>s.call('return',{id:v2.id,items:[{id:p.id,qty:1}],reason:'Devolver produto',method:'pix'}),/fiscal/);s.close();});
-test('validação impede itens duplicados e quantidades fracionadas',()=>{const {s,p}=setup();assert.throws(()=>sale(s,p,{items:[{id:p.id,qty:1},{id:p.id,qty:1}]}),/duplicado/);assert.throws(()=>sale(s,p,{items:[{id:p.id,qty:1.5}]}),/inteiro/);s.close();});
-test('cancelamento fiscal confirmado libera somente devolução integral',()=>{const {s,p}=setup();const v=sale(s,p);s.recordFiscal(v.id,{situacao:'cancelada',chave:'teste'});assert.throws(()=>s.call('return',{id:v.id,reason:'Cancelamento integral',method:'dinheiro',items:[{id:p.id,qty:1}]}),/integral/);assert.equal(s.read().products[0].stock,8);const r=s.call('return',{id:v.id,reason:'Cancelamento integral',method:'dinheiro',items:[{id:p.id,qty:2}]});assert.equal(r.refund,2000);assert.equal(s.read().products[0].stock,10);s.close();});
-test('rateio de devolução conserva centavos entre vários produtos',()=>{const {s,p}=setup();const p2=s.call('product',{name:'Bala',barcode:'999',category:'Doces',price:33,stock:3});const v=sale(s,p,{items:[{id:p.id,qty:1},{id:p2.id,qty:3}],discount:1,payments:[{forma:'pix',amount:1197}]});for(const i of v.items)for(let n=0;n<i.qty;n++)s.call('return',{id:v.id,reason:'Devolução parcial',method:'pix',items:[{id:i.id,qty:1}]});assert.equal(s.read().sales[0].returns.reduce((a,r)=>a+r.refund,0),1197);s.close();});
+import test from "node:test";
+import assert from "node:assert/strict";
+import { Store } from "../electron/store.mjs";
+function setup() {
+  const s = new Store(":memory:");
+  s.call("bootstrap", {
+    name: "Admin",
+    login: "admin",
+    password: "test-password",
+  });
+  const p = s.call("product", {
+    name: "Café",
+    barcode: "789",
+    category: "Alimentos",
+    price: 1099,
+    stock: 10,
+  });
+  s.call("openShift", { opening: 10000 });
+  return { s, p };
+}
+function sale(s, p, extra = {}) {
+  return s.call("sale", {
+    id: "sale-0000000000001",
+    items: [{ id: p.id, qty: 2 }],
+    discount: 198,
+    payments: [{ forma: "dinheiro", amount: 3000 }],
+    ...extra,
+  });
+}
+test("venda: preço confiável, desconto, troco, estoque e idempotência", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  assert.equal(v.total, 2000);
+  assert.equal(v.change, 1000);
+  assert.equal(s.read().products[0].stock, 8);
+  assert.equal(sale(s, p).id, v.id);
+  assert.equal(s.read().products[0].stock, 8);
+  assert.equal(s.read().sales.length, 1);
+  s.close();
+});
+test("transação reverte venda sem estoque ou com pagamento inválido", () => {
+  const { s, p } = setup();
+  assert.throws(
+    () => sale(s, p, { items: [{ id: p.id, qty: 11 }] }),
+    /Estoque/,
+  );
+  assert.throws(
+    () => sale(s, p, { payments: [{ forma: "pix", amount: 3000 }] }),
+    /Troco/,
+  );
+  assert.equal(s.read().products[0].stock, 10);
+  assert.equal(s.read().sales.length, 0);
+  s.close();
+});
+test("pagamento dividido e fechamento descontam apenas troco em dinheiro", () => {
+  const { s, p } = setup();
+  sale(s, p, {
+    payments: [
+      { forma: "pix", amount: 1000 },
+      { forma: "dinheiro", amount: 1500 },
+    ],
+  });
+  s.call("closeShift", { counted: 11000 });
+  const c = s.read().shifts[0];
+  assert.equal(c.expected, 11000);
+  assert.equal(c.counted, c.expected);
+  assert.throws(() => sale(s, p, { id: "sale-0000000000002" }), /Abra o caixa/);
+  s.close();
+});
+test("devoluções parciais repõem estoque, rateiam desconto e impedem repetição", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  const r = s.call("return", {
+    id: v.id,
+    items: [{ id: p.id, qty: 1 }],
+    reason: "Produto devolvido",
+    method: "dinheiro",
+  });
+  assert.equal(r.refund, 1000);
+  assert.equal(s.read().products[0].stock, 9);
+  s.call("return", {
+    id: v.id,
+    items: [{ id: p.id, qty: 1 }],
+    reason: "Produto devolvido",
+    method: "pix",
+  });
+  assert.equal(s.read().products[0].stock, 10);
+  assert.throws(
+    () =>
+      s.call("return", {
+        id: v.id,
+        items: [{ id: p.id, qty: 1 }],
+        reason: "Novamente",
+        method: "dinheiro",
+      }),
+    /saldo/,
+  );
+  s.call("closeShift", { counted: 11000 });
+  assert.equal(s.read().shifts[0].expected, 11000);
+  s.close();
+});
+test("permissões e autenticação são aplicadas no banco, sem hashes na tela", () => {
+  const { s, p } = setup();
+  s.call("employee", {
+    name: "Caixa",
+    login: "caixa",
+    password: "password123",
+    role: "cashier",
+    active: true,
+  });
+  s.call("logout");
+  assert.throws(() => s.call("snapshot"), /Entre/);
+  assert.throws(
+    () => s.call("login", { login: "caixa", password: "errada" }),
+    /incorretos/,
+  );
+  s.call("login", { login: "caixa", password: "password123" });
+  assert.throws(() => s.call("product", p), /administrador/);
+  assert.throws(() => s.call("closeShift", { counted: 0 }), /administrador/);
+  assert.ok(s.call("snapshot").users.every((u) => !u.password));
+  sale(s, p);
+  s.close();
+});
+test("dados fiscais exigem códigos do contador e usam o snapshot da venda", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  assert.throws(() => s.fiscalPayload(v.id), /contador/);
+  s.call("product", { ...p, ncm: "09012100", cfop: "5102", csosn: "102" });
+  const v2 = sale(s, p, { id: "sale-0000000000002" });
+  const payload = s.fiscalPayload(v2.id);
+  assert.equal(payload.venda.itens[0].valorUnitario, 10.99);
+  assert.equal(payload.referencia, v2.id);
+  s.recordFiscal(v2.id, { situacao: "pendente" });
+  assert.throws(
+    () =>
+      s.call("return", {
+        id: v2.id,
+        items: [{ id: p.id, qty: 1 }],
+        reason: "Devolver produto",
+        method: "pix",
+      }),
+    /fiscal/,
+  );
+  s.close();
+});
+test("validação impede itens duplicados e quantidades fracionadas", () => {
+  const { s, p } = setup();
+  assert.throws(
+    () =>
+      sale(s, p, {
+        items: [
+          { id: p.id, qty: 1 },
+          { id: p.id, qty: 1 },
+        ],
+      }),
+    /duplicado/,
+  );
+  assert.throws(
+    () => sale(s, p, { items: [{ id: p.id, qty: 1.5 }] }),
+    /inteiro/,
+  );
+  s.close();
+});
+test("cancelamento fiscal confirmado libera somente devolução integral", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  s.recordFiscal(v.id, { situacao: "cancelada", chave: "teste" });
+  assert.throws(
+    () =>
+      s.call("return", {
+        id: v.id,
+        reason: "Cancelamento integral",
+        method: "dinheiro",
+        items: [{ id: p.id, qty: 1 }],
+      }),
+    /integral/,
+  );
+  assert.equal(s.read().products[0].stock, 8);
+  const r = s.call("return", {
+    id: v.id,
+    reason: "Cancelamento integral",
+    method: "dinheiro",
+    items: [{ id: p.id, qty: 2 }],
+  });
+  assert.equal(r.refund, 2000);
+  assert.equal(s.read().products[0].stock, 10);
+  s.close();
+});
+test("rateio de devolução conserva centavos entre vários produtos", () => {
+  const { s, p } = setup();
+  const p2 = s.call("product", {
+    name: "Bala",
+    barcode: "999",
+    category: "Doces",
+    price: 33,
+    stock: 3,
+  });
+  const v = sale(s, p, {
+    items: [
+      { id: p.id, qty: 1 },
+      { id: p2.id, qty: 3 },
+    ],
+    discount: 1,
+    payments: [{ forma: "pix", amount: 1197 }],
+  });
+  for (const i of v.items)
+    for (let n = 0; n < i.qty; n++)
+      s.call("return", {
+        id: v.id,
+        reason: "Devolução parcial",
+        method: "pix",
+        items: [{ id: i.id, qty: 1 }],
+      });
+  assert.equal(
+    s.read().sales[0].returns.reduce((a, r) => a + r.refund, 0),
+    1197,
+  );
+  s.close();
+});
+const today = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+test("produto excluído some do catálogo, mas aceita devolução da venda anterior", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  s.call("deleteProduct", { id: p.id });
+  assert.equal(s.snapshot().products.length, 0);
+  assert.throws(() => sale(s, p, { id: "sale-0000000000002" }), /encontrado/);
+  s.call("return", {
+    id: v.id,
+    items: [{ id: p.id, qty: 2 }],
+    reason: "Devolver produto excluído",
+    method: "dinheiro",
+  });
+  assert.equal(s.read().products[0].stock, 10);
+  assert.equal(s.snapshot().sales[0].items[0].name, "Café");
+  s.close();
+});
+test("funcionário excluído perde acesso e mantém nome no histórico; próprio usuário é protegido", () => {
+  const { s } = setup();
+  const admin = s.session;
+  s.call("employee", {
+    name: "João",
+    login: "joao",
+    password: "password123",
+    role: "cashier",
+    active: true,
+  });
+  const employee = s.read().users.find((u) => u.login === "joao");
+  assert.throws(() => s.call("deleteEmployee", { id: admin }), /próprio/);
+  s.call("deleteEmployee", { id: employee.id });
+  assert.equal(
+    s.snapshot().users.find((u) => u.id === employee.id).name,
+    "João",
+  );
+  s.call("logout");
+  assert.throws(
+    () => s.call("login", { login: "joao", password: "password123" }),
+    /incorretos/,
+  );
+  s.close();
+});
+test("exclusão de venda estorna apenas saldo não devolvido e retira do caixa sem reutilizar número", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  s.call("return", {
+    id: v.id,
+    items: [{ id: p.id, qty: 1 }],
+    reason: "Devolução parcial",
+    method: "dinheiro",
+  });
+  assert.equal(s.read().products[0].stock, 9);
+  s.call("deleteSale", { id: v.id });
+  assert.equal(s.read().products[0].stock, 10);
+  assert.equal(s.snapshot().sales.length, 0);
+  assert.equal(s.read().sales.length, 1);
+  assert.ok(s.read().sales[0].deletedAt);
+  assert.equal(s.cash(s.read(), s.read().shifts[0]), 10000);
+  assert.throws(() => sale(s, p), /excluída/);
+  const next = sale(s, p, { id: "sale-0000000000002" });
+  assert.equal(next.number, 2);
+  s.close();
+});
+test("exclusão do dia é atômica diante de documento fiscal; lote válido atualiza caixa e estoque", () => {
+  const { s, p } = setup();
+  const first = sale(s, p);
+  const second = sale(s, p, { id: "sale-0000000000002" });
+  s.recordFiscal(second.id, { situacao: "pendente" });
+  const args = { day: today(), ids: [first.id, second.id] };
+  assert.throws(() => s.call("deleteSalesDay", args), /fiscal/);
+  assert.equal(s.snapshot().sales.length, 2);
+  assert.equal(s.read().products[0].stock, 6);
+  s.recordFiscal(second.id, { situacao: "rejeitada" });
+  assert.equal(s.call("deleteSalesDay", args).count, 2);
+  assert.equal(s.snapshot().sales.length, 0);
+  assert.equal(s.read().products[0].stock, 10);
+  assert.equal(s.cash(s.read(), s.read().shifts[0]), 10000);
+  s.close();
+});
+test("exclusões rejeitam caixa fechado, data antiga e lista desatualizada", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  assert.throws(
+    () => s.call("deleteSalesDay", { day: "2000-01-01", ids: [v.id] }),
+    /dia atual/,
+  );
+  assert.throws(
+    () => s.call("deleteSalesDay", { day: today(), ids: [] }),
+    /lista/,
+  );
+  s.call("closeShift", { counted: 12000 });
+  assert.throws(() => s.call("deleteSale", { id: v.id }), /fechado/);
+  assert.equal(s.snapshot().sales.length, 1);
+  s.close();
+});
+test("operador não pode excluir cadastros nem vendas por acesso direto ao IPC", () => {
+  const { s, p } = setup();
+  const v = sale(s, p);
+  s.call("employee", {
+    name: "Caixa",
+    login: "caixa",
+    password: "password123",
+    role: "cashier",
+    active: true,
+  });
+  s.call("login", { login: "caixa", password: "password123" });
+  for (const action of [
+    "deleteProduct",
+    "deleteEmployee",
+    "deleteSale",
+    "deleteSalesDay",
+  ])
+    assert.throws(
+      () => s.call(action, { id: v.id, day: today(), ids: [v.id] }),
+      /administrador/,
+    );
+  assert.equal(s.snapshot().sales.length, 1);
+  s.close();
+});

@@ -26,6 +26,19 @@ const escape = (s) =>
   );
 const money = (n) =>
   (n / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+// Envie erros de negócio como dados: o Electron não acrescenta seu prefixo técnico.
+function handle(channel, listener) {
+  ipcMain.handle(channel, async (...args) => {
+    try {
+      return { ok: true, value: await listener(...args) };
+    } catch (error) {
+      return {
+        ok: false,
+        error: error?.message || "Não foi possível concluir a operação.",
+      };
+    }
+  });
+}
 function trusted(event) {
   if (
     event.sender !== win?.webContents ||
@@ -75,11 +88,11 @@ app
       fiscal().catch((e) => dialog.showErrorBox("Emissor fiscal", e.message));
     mkdirSync(folder, { recursive: true });
     store = new Store(join(folder, "pdv.sqlite"));
-    ipcMain.handle("pdv", (e, a, p) => {
+    handle("pdv", (e, a, p) => {
       trusted(e);
       return store.call(a, p);
     });
-    ipcMain.handle("fiscal:fetch", async (e, p) => {
+    handle("fiscal:fetch", async (e, p) => {
       trusted(e);
       store.user(store.read(), true);
       const url = new URL(p.url, "http://local");
@@ -102,7 +115,7 @@ app
         corpo: new Uint8Array(await r.arrayBuffer()),
       };
     });
-    ipcMain.handle("emit", async (e, id) => {
+    handle("emit", async (e, id) => {
       trusted(e);
       const payload = store.fiscalPayload(id);
       if (emitting.has(id)) return emitting.get(id);
@@ -146,7 +159,7 @@ app
         emitting.delete(id);
       }
     });
-    ipcMain.handle("cancelFiscal", async (e, id, justificativa) => {
+    handle("cancelFiscal", async (e, id, justificativa) => {
       trusted(e);
       const state = store.read();
       store.user(state, true);
@@ -175,7 +188,7 @@ app
       });
       return "Cancelamento fiscal confirmado. Registre agora a devolução integral e o reembolso.";
     });
-    ipcMain.handle("backup", async (e) => {
+    handle("backup", async (e) => {
       trusted(e);
       store.user(store.read(), true);
       const r = await dialog.showSaveDialog(win, {
@@ -187,11 +200,11 @@ app
       }
       return "Backup cancelado.";
     });
-    ipcMain.handle("receipt", async (e, id) => {
+    handle("receipt", async (e, id) => {
       trusted(e);
       const s = store.read();
       store.user(s);
-      const sale = s.sales.find((x) => x.id === id);
+      const sale = s.sales.find((x) => x.id === id && !x.deletedAt);
       if (!sale) throw Error("Venda não encontrada.");
       const path = join(app.getPath("temp"), "pdv-recibo-" + sale.id + ".html");
       writeFileSync(

@@ -116,7 +116,8 @@ function App() {
     [fiscalTab, setFiscalTab] = useState("config"),
     [ambiente, setAmbiente] = useState(2),
     [shiftOpen, setShiftOpen] = useState(false),
-    [paymentOpen, setPaymentOpen] = useState(false);
+    [paymentOpen, setPaymentOpen] = useState(false),
+    [deletion, setDeletion] = useState(null);
   useEffect(() => {
     api
       .call("status")
@@ -180,6 +181,20 @@ function App() {
       setSelected(v.id);
       setPage("vendas");
     }, "Venda concluída. Estoque atualizado; recibo e emissão fiscal disponíveis.");
+  const remove = () =>
+    run(async () => {
+      const request = deletion;
+      const result = await act(request.action, request.payload);
+      if (request.action === "deleteProduct")
+        setCart((items) => items.filter((i) => i.id !== request.payload.id));
+      if (["deleteSale", "deleteSalesDay"].includes(request.action))
+        setSelected(null);
+      setEditing(null);
+      setDeletion(null);
+      return result.count
+        ? `${result.count} venda(s) excluída(s). Estoque e caixa atualizados.`
+        : "Registro excluído.";
+    });
   const selectedSale = s?.sales.find((v) => v.id === selected);
   const fiscalEmit = (id) =>
     run(async () => {
@@ -905,6 +920,20 @@ function App() {
                             <td>
                               <button onClick={() => setEditing(p)}>
                                 Editar
+                              </button>{" "}
+                              <button
+                                className="danger"
+                                aria-label={"Excluir produto " + p.name}
+                                onClick={() =>
+                                  setDeletion({
+                                    action: "deleteProduct",
+                                    payload: { id: p.id },
+                                    title: "Excluir produto?",
+                                    message: `${p.name} deixará de aparecer no catálogo. O histórico das vendas será mantido.`,
+                                  })
+                                }
+                              >
+                                Excluir
                               </button>
                             </td>
                           </tr>
@@ -1078,19 +1107,38 @@ function App() {
                   </details>
                 </section>
                 <section className="panel">
-                  {s.users.map((u) => (
-                    <div className="list-row" key={u.id}>
-                      <div>
-                        <b>{u.name}</b>
-                        <small>
-                          {u.login} ·{" "}
-                          {u.role === "admin" ? "Administrador" : "Operador"} ·{" "}
-                          {u.active ? "Ativo" : "Inativo"}
-                        </small>
+                  {s.users
+                    .filter((u) => !u.deletedAt)
+                    .map((u) => (
+                      <div className="list-row" key={u.id}>
+                        <div>
+                          <b>{u.name}</b>
+                          <small>
+                            {u.login} ·{" "}
+                            {u.role === "admin" ? "Administrador" : "Operador"}{" "}
+                            · {u.active ? "Ativo" : "Inativo"}
+                          </small>
+                        </div>
+                        <div className="row-actions">
+                          <button onClick={() => setEditing(u)}>Editar</button>
+                          <button
+                            className="danger"
+                            aria-label={"Excluir funcionário " + u.name}
+                            disabled={u.id === s.me.id}
+                            onClick={() =>
+                              setDeletion({
+                                action: "deleteEmployee",
+                                payload: { id: u.id },
+                                title: "Excluir funcionário?",
+                                message: `${u.name} perderá o acesso ao sistema. O nome será preservado nos registros de vendas anteriores.`,
+                              })
+                            }
+                          >
+                            Excluir
+                          </button>
+                        </div>
                       </div>
-                      <button onClick={() => setEditing(u)}>Editar</button>
-                    </div>
-                  ))}
+                    ))}
                 </section>
               </div>
             )}
@@ -1104,6 +1152,31 @@ function App() {
                     value={day}
                     onChange={(e) => setDay(e.target.value)}
                   />
+                  {admin && (
+                    <button
+                      className="danger daily-delete"
+                      disabled={
+                        busy ||
+                        day !== localDay(new Date()) ||
+                        !s.sales.some((v) => localDay(v.at) === day)
+                      }
+                      onClick={() =>
+                        setDeletion({
+                          action: "deleteSalesDay",
+                          payload: {
+                            day,
+                            ids: s.sales
+                              .filter((v) => localDay(v.at) === day)
+                              .map((v) => v.id),
+                          },
+                          title: "Excluir vendas do dia?",
+                          message: `Excluir ${s.sales.filter((v) => localDay(v.at) === day).length} venda(s) de ${day.split("-").reverse().join("/")}? Os itens ainda não devolvidos voltarão ao estoque, e as vendas sairão dos totais do caixa e dos relatórios. Isso não cancela pagamentos no banco ou na maquininha.`,
+                        })
+                      }
+                    >
+                      Excluir vendas do dia
+                    </button>
+                  )}
                   {s.sales
                     .filter((v) => localDay(v.at) === day)
                     .slice()
@@ -1186,6 +1259,25 @@ function App() {
                           .join(" · ")}
                       </p>
                       <div className="actions">
+                        {admin && (
+                          <button
+                            className="danger"
+                            disabled={
+                              busy ||
+                              localDay(selectedSale.at) !== localDay(new Date())
+                            }
+                            onClick={() =>
+                              setDeletion({
+                                action: "deleteSale",
+                                payload: { id: selectedSale.id },
+                                title: "Excluir venda?",
+                                message: `Excluir a venda #${selectedSale.number}? O estoque dos itens não devolvidos será reposto, e os totais do caixa serão ajustados. Isso não estorna pagamentos fora do aplicativo.`,
+                              })
+                            }
+                          >
+                            Excluir venda
+                          </button>
+                        )}
                         <button
                           onClick={() =>
                             run(
@@ -1416,6 +1508,49 @@ function App() {
                   </>
                 )}
               </section>
+            )}
+            {deletion && (
+              <Modal
+                title={deletion.title}
+                onClose={() => {
+                  if (!busy) {
+                    setDeletion(null);
+                    setError("");
+                  }
+                }}
+              >
+                <p>{deletion.message}</p>
+                {["deleteSale", "deleteSalesDay"].includes(deletion.action) && (
+                  <p className="muted">
+                    Disponível apenas para vendas de hoje em caixa ainda aberto.
+                    Documentos fiscais precisam estar cancelados ou rejeitados.
+                    A exclusão é registrada na auditoria.
+                  </p>
+                )}
+                {error && (
+                  <p className="error" role="alert">
+                    {error}
+                  </p>
+                )}
+                <div className="actions">
+                  <button
+                    disabled={busy}
+                    onClick={() => {
+                      setDeletion(null);
+                      setError("");
+                    }}
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    className="danger primary-danger"
+                    disabled={busy}
+                    onClick={remove}
+                  >
+                    {busy ? "Excluindo…" : "Confirmar exclusão"}
+                  </button>
+                </div>
+              </Modal>
             )}
           </main>
         </div>

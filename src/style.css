@@ -815,3 +815,29 @@ summary {
   display: block;
   flex-shrink: 0;
 }
+
+.danger {
+  color: #a13f35;
+  border-color: #ead2ce;
+}
+.danger:hover {
+  background: #fff2ef;
+  border-color: #c8857c;
+}
+.primary-danger {
+  background: #a13f35;
+  color: white;
+  border-color: #a13f35;
+}
+.primary-danger:hover {
+  background: #86372f;
+  color: white;
+}
+.row-actions {
+  display: flex;
+  gap: 8px;
+}
+.daily-delete {
+  width: 100%;
+  margin-top: 12px;
+}

@@ -120,6 +120,8 @@ export async function smoke(win) {
     "window.dispatchEvent(new KeyboardEvent('keydown',{key:'F2',bubbles:true}))",
   );
   await until("Boolean(document.querySelector('dialog[open]'))");
+  await until("getComputedStyle(document.querySelector('.payment-dialog .payment')).gap==='14px'");
+  writeFileSync(join(tmpdir(), "omnipdv-pagamento.png"), (await win.webContents.capturePage()).toPNG());
   await click("R$ 50");
   await until(
     "document.querySelector('[aria-label=\"Valor pago\"]').value==='50.00'",
@@ -167,6 +169,14 @@ export async function smoke(win) {
     throw Error("Cancelamento de pré-venda não foi auditado corretamente.");
   await click("Relatórios");
   await until("document.body.innerText.includes('Receita líquida do dia')");
+  await until("Array.from(document.querySelectorAll('button')).some(b=>b.textContent.includes('Exportar Excel'))");
+  await click("Clientes");
+  await until("document.body.innerText.includes('Clientes e histórico')");
+  await js("document.querySelector('.editor summary').click()");
+  await until("document.querySelector('.editor details').open");
+  await js("document.querySelector('.editor form').requestSubmit()");
+  await until("document.body.innerText.includes('Cliente não identificado')");
+
   await click("Produtos e estoque");
   await until("Boolean(document.querySelector('.editor details'))");
   await js("document.querySelector('.editor summary').click()");

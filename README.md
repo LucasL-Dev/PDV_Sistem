@@ -11,13 +11,25 @@ Use Windows 10 ou 11 de 64 bits (x64). **Quem instala o aplicativo não precisa 
 1. Abra [Instalador Windows no GitHub Actions](https://github.com/LucasL-Dev/PDV_Sistem/actions/workflows/windows.yml) e entre na sua conta do GitHub.
 2. Abra a execução mais recente com **✓ verde**. Ao fim da página, em **Artifacts**, baixe **Instalador-Windows**. Se a execução estiver em andamento, aguarde a conclusão; um build com falha não disponibiliza o instalador.
 3. Clique com o botão direito no ZIP baixado e selecione **Extrair tudo**.
-4. Abra `OmniPDV-Setup-2.0.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
+4. Abra `OmniPDV-Setup-2.1.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
 5. O aplicativo abre ao terminar. Nas próximas vezes, use o atalho **OmniPDV** na Área de Trabalho ou no menu Iniciar.
 6. No primeiro acesso, crie o administrador. Cadastre seus produtos e clique em **Abrir caixa** para começar.
 
 Quando houver uma versão publicada em [Releases](https://github.com/LucasL-Dev/PDV_Sistem/releases), você também poderá baixar o `.exe` diretamente por lá, sem o ZIP dos artefatos. O workflow publica Releases quando uma tag `v*` é enviada; um push em `main` gera o artefato de teste. Os artefatos ficam disponíveis por 90 dias. Se não houver execução, o responsável pelo repositório pode abrir **Actions → Instalador Windows → Run workflow**.
 
-O instalador ainda não tem assinatura digital e o Windows pode mostrar um aviso de editor desconhecido. Não desative as proteções do sistema. O arquivo `.sha256` acompanha o `.exe` para conferência de integridade. Os testes do workflow conferem o aplicativo em Windows, mas impressão, hardware do caixa e emissão real precisam ser validados na loja.
+A geração suporta assinatura digital com Azure Artifact Signing. Até configurar a conta e ativar a assinatura no GitHub, os builds de teste continuam sem assinatura e o Windows pode mostrar um aviso de editor desconhecido. Veja o [tutorial de assinatura para Windows](docs/ASSINATURA-WINDOWS.md). Não desative as proteções do sistema. O arquivo `.sha256` acompanha o `.exe` para conferência de integridade. Os testes do workflow conferem o aplicativo em Windows, mas impressão, hardware do caixa e emissão real precisam ser validados na loja.
+
+### Dados do cliente opcionais
+
+Nome, CPF/CNPJ e telefone são opcionais no cadastro. Sem nome, o sistema gera “Cliente não identificado” com um identificador. Também é possível concluir vendas sem selecionar cliente. Fiado e crédito da loja exigem selecionar um cadastro para vincular o saldo, mas seus dados pessoais continuam opcionais. Exigências específicas da legislação fiscal ou do provedor de pagamento ainda podem se aplicar na emissão/cobrança.
+
+### Exportar dados para Excel
+
+Entre como **Gerente ou Admin**, abra **Relatórios → Exportar Excel (.xlsx)**, escolha a pasta e salve. Abra o arquivo no Excel ou LibreOffice Calc.
+
+A planilha contém abas de produtos, clientes, funcionários, vendas, itens, pagamentos, caixas, conferência por forma de pagamento, movimentos, devoluções, contas a receber, recebimentos, créditos da loja, cancelamentos e auditoria resumida. A exportação inclui todo o histórico disponível (não apenas a data do relatório), com registros excluídos marcados por status. Os valores são células numéricas em reais, códigos de barras preservam zeros à esquerda e quantidades mantêm até três casas decimais. Datas usam o formato ISO registrado pelo sistema.
+
+Senhas, credenciais Pix, certificados e detalhes internos da auditoria não entram na planilha. Ela contém dados pessoais/comerciais: compartilhe apenas com pessoas autorizadas. **Excel não substitui o backup SQLite nem os XMLs fiscais** e não há importação dessa planilha.
 
 ### Atualizar sem reinstalar ferramentas
 
@@ -142,7 +154,7 @@ Esse comando cria uma versão de desenvolvimento **sem assinatura digital**, com
 Ao finalizar, procure:
 
 ```text
-release\OmniPDV-Setup-2.0.0-x64.exe
+release\OmniPDV-Setup-2.1.0-x64.exe
 ```
 
 Abra esse arquivo para instalar no Windows e use o atalho criado pelo instalador. O computador que apenas executa o aplicativo instalado não precisa de Node.js nem Git. Para distribuir oficialmente, configure assinatura de código e teste o instalador em Windows; a opção `signExecutable=false` permite personalizar nome e ícone, mas não substitui a assinatura digital.

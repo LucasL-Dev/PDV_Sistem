@@ -1031,3 +1031,20 @@ textarea {
   --fiscal-destaque: #285d53;
   --fiscal-texto-destaque: #fff;
 }
+
+/* Separate payment groups without changing the keyboard flow. */
+.payment-dialog > .muted { display: block; margin: 20px 0 16px; line-height: 1.6; }
+.payment-dialog .payment { gap: 14px; margin-top: 16px; align-items: center; }
+.payment-dialog .payment input, .payment-dialog .payment select { min-width: 0; min-height: 46px; }
+.payment-dialog > .link { margin: 10px 0 6px; padding: 12px 0; }
+.payment-dialog .cash-bills { gap: 12px; margin: 10px 0 26px; }
+.payment-dialog .cash-bills button { padding: 12px 16px; }
+.payment-dialog .approval { margin: 24px 0; padding: 18px 0; border-block: 1px solid var(--line); }
+.payment-dialog .change { margin: 24px 0; padding-top: 20px; border-top: 1px solid var(--line); font-size: 16px; }
+.payment-dialog .checkout { margin-top: 8px; min-height: 48px; }
+.export-action { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin: 20px 0; }
+.export-action small { max-width: 620px; line-height: 1.5; }
+@media (max-width: 480px) {
+  .payment-dialog .payment { flex-wrap: wrap; }
+  .payment-dialog .payment select, .payment-dialog .payment input { flex: 1 1 130px; width: auto; }
+}

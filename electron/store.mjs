@@ -236,11 +236,12 @@ export class Store {
             fail(
               "Cliente vinculado a cobrança Pix pendente. Confirme ou cancele antes de editar.",
             );
+          const id = old?.id || randomUUID();
           const c = {
-            id: old?.id || randomUUID(),
-            name: text(p.name),
-            document: p.document?.trim() || "",
-            phone: p.phone?.trim() || "",
+            id,
+            name: text(p.name ?? "", 0) || `Cliente não identificado (${id.slice(0, 8)})`,
+            document: text(p.document ?? "", 0),
+            phone: text(p.phone ?? "", 0),
             creditLimit: integer(p.creditLimit ?? old?.creditLimit ?? 0),
           };
           if (old) Object.assign(old, c);

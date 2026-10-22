@@ -79,7 +79,7 @@ function Icon({ name }) {
     </svg>
   );
 }
-function Modal({ title, onClose, children }) {
+function Modal({ title, onClose, children, className }) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current.showModal();
@@ -89,6 +89,7 @@ function Modal({ title, onClose, children }) {
   }, []);
   return (
     <dialog
+      className={className}
       ref={ref}
       onClose={onClose}
       onCancel={(e) => {
@@ -1023,6 +1024,7 @@ function App() {
                     {paymentOpen && (
                       <Modal
                         title="Pagamento"
+                        className="payment-dialog"
                         onClose={() => {
                           setPaymentOpen(false);
                           setApproval({ login: "", password: "" });
@@ -1434,20 +1436,20 @@ function App() {
                         });
                       }}
                     >
+                      <p className="muted">Todos os dados pessoais são opcionais. Sem nome, será gerada uma identificação para o cadastro.</p>
                       <div className="form-grid">
                         <Input
-                          label="Nome"
+                          label="Nome (opcional)"
                           name="name"
                           defaultValue={editing?.name}
-                          required
                         />
                         <Input
-                          label="CPF / CNPJ"
+                          label="CPF / CNPJ (opcional)"
                           name="document"
                           defaultValue={editing?.document}
                         />
                         <Input
-                          label="Telefone"
+                          label="Telefone (opcional)"
                           name="phone"
                           defaultValue={editing?.phone}
                         />
@@ -1458,7 +1460,6 @@ function App() {
                           min="0"
                           step="0.01"
                           defaultValue={(editing?.creditLimit || 0) / 100}
-                          required
                         />
                       </div>
                       <button className="primary" disabled={busy}>
@@ -1967,6 +1968,12 @@ function App() {
                   >
                     Salvar backup do banco
                   </button>
+                </div>
+                <div className="export-action">
+                  <button disabled={busy} onClick={() => run(() => api.exportExcel())}>
+                    Exportar Excel (.xlsx)
+                  </button>
+                  <small className="muted">Todos os dados, organizados por abas. Inclui registros excluídos identificados por status. Não substitui o backup.</small>
                 </div>
                 <Reports s={s} day={day} />
                 <ShiftReports s={s} api={api} run={run} />

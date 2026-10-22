@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld("pdv", {
   emit: (id) => invoke("emit", id),
   cancelFiscal: (id, reason, approval) =>
     invoke("cancelFiscal", id, reason, approval),
+  exportExcel: () => invoke("export:excel"),
   backup: () => invoke("backup"),
 });
 contextBridge.exposeInMainWorld("fiscal", {

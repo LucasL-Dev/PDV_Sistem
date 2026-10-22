@@ -1,3 +1,4 @@
+import { exportWorkbook } from "./export.mjs";
 import { MercadoPago, verifiedPayment } from "./pix.mjs";
 import { reservePix, finalizePix } from "./pix-flow.mjs";
 import { sendThermal } from "./thermal.mjs";
@@ -501,6 +502,20 @@ app
         }),
       );
       return "Cancelamento fiscal confirmado. Registre agora a devolução integral e o reembolso.";
+    });
+    handle("export:excel", async (e) => {
+      trusted(e);
+      store.user(store.read(), true);
+      const result = await dialog.showSaveDialog(win, {
+        title: "Exportar dados para Excel",
+        defaultPath: `OmniPDV-dados-${new Date().toISOString().slice(0, 10)}.xlsx`,
+        filters: [{ name: "Planilha Excel", extensions: ["xlsx"] }],
+      });
+      if (result.canceled || !result.filePath) return "Exportação cancelada.";
+      // Recheck authorization after the asynchronous native dialog.
+      const workbook = exportWorkbook(store);
+      await workbook.xlsx.writeFile(result.filePath);
+      return "Planilha Excel salva com sucesso.";
     });
     handle("backup", async (e) => {
       trusted(e);

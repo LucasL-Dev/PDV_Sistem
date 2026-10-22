@@ -1,6 +1,6 @@
 {
   "name": "omnipdv",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "private": true,
   "type": "module",
   "main": "electron/main.mjs",
@@ -9,25 +9,26 @@
     "build": "pnpm --filter @fiscal/agente... --filter @fiscal/ui... build && vite build",
     "start": "electron .",
     "test": "node --test tests/*.test.mjs",
-    "dist": "pnpm build && electron-builder",
+    "dist": "pnpm build && electron-builder --config electron-builder.config.cjs",
     "smoke": "electron --ozone-platform=headless --disable-gpu .",
-    "dist:win": "pnpm build && electron-builder --win nsis --x64 --publish never"
+    "dist:win": "pnpm build && electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never"
   },
   "dependencies": {
     "@fiscal/agente": "workspace:*",
     "@fiscal/ui": "workspace:*",
+    "exceljs": "4.4.0",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },
   "devDependencies": {
-    "electron": "45.0.0",
-    "electron-builder": "26.15.3",
-    "vite": "6.4.1",
-    "tsup": "^8.3.5",
-    "typescript": "^5.6.3",
     "@types/node": "^22.10.0",
     "@types/react": "18.3.12",
-    "@types/react-dom": "18.3.1"
+    "@types/react-dom": "18.3.1",
+    "electron": "45.0.0",
+    "electron-builder": "26.15.3",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vite": "6.4.1"
   },
   "build": {
     "appId": "br.com.pdvsistem",

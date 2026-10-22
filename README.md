@@ -2,9 +2,152 @@
 
 Aplicativo desktop Electron + React, com banco SQLite local e emissor NFC-e embutido do [Sull-s/fiscal](https://github.com/Sull-s/fiscal).
 
-## Executar
+## Executar no Windows — passo a passo
 
-Pré-requisitos: Node.js 24 ou superior e um sistema desktop Windows/Linux. No Linux, o emissor exige um cofre de senhas do sistema (Secret Service/KWallet); armazenamento `basic_text` é recusado.
+Este tutorial abre o aplicativo a partir do código publicado neste repositório. **Não é necessário baixar o ZIP de Windows mostrado anteriormente na conversa**: ele não está publicado no GitHub. A pasta `release/` é gerada localmente e não faz parte do código versionado.
+
+### 1. Instale as ferramentas
+
+Use **Windows 10 ou 11 de 64 bits (x64)**, com acesso à internet para baixar as dependências.
+
+1. Baixe e instale o **Node.js 24 LTS para Windows x64** em [nodejs.org](https://nodejs.org/). Mantenha a opção de adicionar ao `PATH`.
+2. Baixe e instale o **Git para Windows** em [git-scm.com](https://git-scm.com/downloads/win). Na instalação, permita o uso do Git pela linha de comando.
+3. Feche terminais que já estavam abertos. Abra o menu Iniciar, digite **cmd** e abra o **Prompt de Comando**. Os comandos abaixo foram escritos para esse terminal.
+4. Confira a instalação:
+
+```bat
+node --version
+npm --version
+git --version
+```
+
+O Node deve mostrar `v24.x.x` ou uma versão posterior compatível. Se aparecer “não é reconhecido como um comando”, reabra o terminal; se persistir, revise a instalação e o `PATH` antes de continuar.
+
+### 2. Baixe o projeto
+
+No Prompt de Comando, execute uma linha de cada vez:
+
+```bat
+cd /d "%USERPROFILE%\Documents"
+git clone https://github.com/LucasL-Dev/PDV_Sistem.git
+cd PDV_Sistem
+```
+
+Se preferir outra pasta, substitua a primeira linha pelo caminho desejado. Se o repositório for privado, autentique-se no GitHub quando o Git solicitar; nunca coloque tokens ou senhas dentro do código.
+
+**Alternativa sem Git:** na página do repositório, clique em **Code → Download ZIP**, extraia tudo e abra o Prompt de Comando na pasta extraída, normalmente `PDV_Sistem-main`. Essa alternativa dispensa a instalação do Git, mas exige baixar outro ZIP para receber atualizações.
+
+Antes de continuar, confira se está na pasta correta:
+
+```bat
+dir package.json
+```
+
+O comando deve encontrar o arquivo `package.json`. Todos os próximos comandos devem ser executados nessa mesma pasta.
+
+### 3. Instale as dependências
+
+```bat
+npx --yes pnpm@9.15.0 install --frozen-lockfile
+```
+
+Aguarde o comando terminar e o terminal voltar a aceitar comandos. A primeira instalação pode demorar alguns minutos. O `npx` obtém a versão do pnpm usada pelo projeto; não é necessário instalar pnpm globalmente.
+
+Use **pnpm**, pois o projeto contém pacotes locais em workspace. Não substitua esse comando por `npm install`.
+
+### 4. Baixe o Electron
+
+```bat
+node --use-env-proxy node_modules/electron/install.js
+```
+
+O Electron 45 exige essa instalação explícita do executável. Aguarde o término. O comando pode finalizar sem exibir uma mensagem de sucesso.
+
+### 5. Compile o aplicativo
+
+```bat
+npx --yes pnpm@9.15.0 build
+```
+
+Esse comando compila a biblioteca fiscal e a interface. Ao terminar com sucesso, a pasta `dist` estará disponível. Se houver erro, resolva-o antes de tentar abrir o aplicativo.
+
+### 6. Abra o PDV Sistem
+
+```bat
+npx --yes pnpm@9.15.0 start
+```
+
+Uma janela do **PDV Sistem** deverá abrir. Mantenha o terminal aberto enquanto usa o aplicativo.
+
+Depois de concluir a primeira instalação, para abrir novamente basta entrar na pasta do projeto e executar o comando `start`. Não é necessário reinstalar nem compilar a cada abertura se o código não mudou.
+
+### 7. Configure o primeiro acesso e faça uma venda
+
+1. Na tela inicial, crie o **administrador**, com nome, login e senha de pelo menos oito caracteres. Não existe usuário ou senha padrão.
+2. Abra **Produtos e estoque** e cadastre nome, código de barras/SKU, categoria, preço e estoque inicial.
+3. Se desejar, cadastre os clientes em **Clientes** e os operadores em **Funcionários**.
+4. Entre em **Frente de caixa**, informe o fundo inicial e clique em **Abrir caixa**.
+5. Selecione os produtos, informe o pagamento e clique em **Concluir venda**.
+6. Em **Vendas e devoluções**, consulte a venda e imprima o recibo. O recibo interno é **não fiscal**.
+7. No fechamento, informe o dinheiro contado e clique em **Fechar caixa**, usando o administrador.
+
+O leitor de código de barras pode funcionar como teclado: selecione a busca de produtos, leia o código e envie Enter.
+
+**Uma venda fica gravada de verdade e altera o estoque.** Se estiver apenas avaliando, use produtos de teste e registre a devolução para desfazer seus efeitos. Pix e cartão são registrados manualmente: confirme o recebimento fora do aplicativo antes de concluir a venda.
+
+Para NFC-e, siga a seção [Configuração fiscal](#configuração-fiscal). O cadastro do A1 é feito dentro do aplicativo, com proteção do Windows; nunca coloque certificado, senha ou CSC no repositório. Emissão real ainda depende da configuração da empresa e de validação em homologação.
+
+### 8. Gere um instalador `.exe` no Windows — opcional
+
+Para usar o PDV, o comando `start` já é suficiente. Se quiser gerar um instalador local, depois do build execute:
+
+```bat
+npx --yes pnpm@9.15.0 exec electron-builder --win nsis --x64 --config.win.signAndEditExecutable=false
+```
+
+Esse comando cria uma versão de desenvolvimento **sem assinatura digital**, sem configurar certificado de assinatura de código. O certificado de assinatura do instalador é diferente do A1 usado para notas fiscais.
+
+Ao finalizar, procure:
+
+```text
+release\PDV Sistem Setup 1.0.0.exe
+```
+
+Abra esse arquivo para instalar no Windows e use o atalho criado pelo instalador. O computador que apenas executa o aplicativo instalado não precisa de Node.js nem Git. Para distribuir oficialmente, configure assinatura de código e teste o instalador em Windows; não use a opção `signAndEditExecutable=false` como substituto da assinatura.
+
+### 9. Atualize o código posteriormente
+
+Se baixou usando Git e não modificou os arquivos do projeto, feche o aplicativo e execute na pasta do projeto:
+
+```bat
+git pull --ff-only origin main
+npx --yes pnpm@9.15.0 install --frozen-lockfile
+node --use-env-proxy node_modules/electron/install.js
+npx --yes pnpm@9.15.0 build
+npx --yes pnpm@9.15.0 start
+```
+
+Se o Git informar alterações locais ou conflito, preserve seu trabalho antes de atualizar. Não use comandos de reset para apagar alterações. Se você usa o aplicativo instalado, gere e instale a nova versão depois de atualizar e compilar o código. Faça backup do banco e dos dados fiscais antes de atualizar; veja [Dados e backup](#dados-e-backup).
+
+### Problemas comuns no Windows
+
+| Mensagem ou sintoma | O que conferir |
+| --- | --- |
+| `node`, `npm`, `npx` ou `git` não reconhecido | Reabra o terminal e confira se as ferramentas estão instaladas e no `PATH`. |
+| PowerShell bloqueia `npx.ps1` | Use o **Prompt de Comando (cmd)** deste tutorial ou `npx.cmd` no lugar de `npx` no PowerShell. Não é necessário mudar a política de execução do Windows. |
+| Arquivo `package.json` não encontrado | Entre na pasta que contém `package.json`, `pnpm-workspace.yaml` e `src`. |
+| `Unsupported URL Type: workspace:` | Você provavelmente usou npm para instalar. Utilize o comando de instalação com pnpm da etapa 3. |
+| Electron não instalado ou `path.txt` ausente | Execute novamente a etapa 4 e confira se o download terminou sem erro. |
+| Janela não abre por ausência de `dist/index.html` | Execute o build da etapa 5 antes do `start`. Não abra `index.html` diretamente pelo navegador. |
+| Falha de download ou de certificado TLS | Confira internet, proxy e certificados da rede corporativa. Não desative a verificação TLS nem o antivírus para contornar o erro. |
+| Arquivo de instalador não aparece | Confira se o comando de empacotamento terminou sem erro. Gerar o instalador no Linux pode exigir Wine; este tutorial utiliza Windows. |
+| Emissão fiscal bloqueada | Configure os dados da empresa, A1, CSC e códigos fiscais com o contador; teste em homologação. |
+
+Os testes do caixa, o build e o fluxo Electron foram validados em Linux. O pacote Windows x64 foi preparado, mas **a execução e a instalação em um Windows real ainda precisam ser validadas**. Ao relatar um problema, informe a versão do Windows, o comando executado e a mensagem de erro, sem enviar senhas, certificados ou dados de clientes.
+
+## Executar no Linux
+
+Requer Node.js 24 ou superior. O emissor fiscal exige um cofre de senhas do sistema (Secret Service/KWallet); armazenamento `basic_text` é recusado.
 
 ```sh
 npx --yes pnpm@9.15.0 install --frozen-lockfile
@@ -12,10 +155,6 @@ node --use-env-proxy node_modules/electron/install.js
 npx --yes pnpm@9.15.0 build
 npx --yes pnpm@9.15.0 start
 ```
-
-Electron 45 tem instalação explícita do binário. No Windows, também é possível executar `node node_modules/electron/install.js` sem a opção de proxy quando não houver proxy configurado.
-
-O primeiro uso pede a criação do administrador, sem senha predefinida. Cadastre produtos e estoque, adicione funcionários e clientes, abra o caixa e registre as vendas. Um leitor de código de barras que funciona como teclado pode usar o campo de busca com Enter.
 
 ## Funcionalidades
 

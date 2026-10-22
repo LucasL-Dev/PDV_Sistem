@@ -10,6 +10,7 @@ import {
 } from "@fiscal/ui";
 import "@fiscal/ui/estilos.css";
 import "./style.css";
+import logo from "../assets/brand/icon-256.png";
 const api = window.pdv;
 const fiscal = criarClienteFiscal({
   url: "fiscal://local",
@@ -190,7 +191,7 @@ function App() {
     return (
       <div className="auth">
         <div className="brand">
-          <span className="brand-mark">P</span> PDV Sistem
+          <img className="brand-mark" src={logo} alt="" /> OmniPDV
         </div>
         <div className="auth-card">
           <small>ACESSO À SUA LOJA</small>
@@ -246,9 +247,9 @@ function App() {
       <div className="shell">
         <aside>
           <div className="brand">
-            <span className="brand-mark">P</span>
+            <img className="brand-mark" src={logo} alt="" />
             <div>
-              PDV Sistem<small>Gestão da loja</small>
+              OmniPDV<small>Gestão da loja</small>
             </div>
           </div>
           <small className="section-label">MENU</small>

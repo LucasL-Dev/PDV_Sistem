@@ -43,16 +43,18 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Gerar instalador
         run: pnpm exec electron-builder --win nsis --x64 --publish never
+      - name: Verificar icone do executavel Windows
+        run: node scripts/verify-windows-icon.mjs
       - name: Testar aplicativo empacotado
         shell: pwsh
         run: |
           $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'pdv-smoke-packaged'
-          $process = Start-Process -FilePath '.\release\win-unpacked\PDV Sistem.exe' -Wait -PassThru
+          $process = Start-Process -FilePath '.\release\win-unpacked\OmniPDV.exe' -Wait -PassThru
           if ($process.ExitCode -ne 0) { exit $process.ExitCode }
       - name: Calcular SHA-256 do instalador
         shell: pwsh
         run: |
-          Get-ChildItem release/PDV-Sistem-Setup-*.exe | ForEach-Object {
+          Get-ChildItem release/OmniPDV-Setup-*.exe | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)" | Set-Content -Encoding ascii "$($_.FullName).sha256"
           }
@@ -61,8 +63,8 @@ jobs:
         with:
           name: Instalador-Windows
           path: |
-            release/PDV-Sistem-Setup-*.exe
-            release/PDV-Sistem-Setup-*.exe.sha256
+            release/OmniPDV-Setup-*.exe
+            release/OmniPDV-Setup-*.exe.sha256
           if-no-files-found: error
           retention-days: 90
       - name: Guardar captura do teste
@@ -70,7 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Captura-Windows
-          path: ${{ runner.temp }}/pdv-sistem.png
+          path: ${{ runner.temp }}/omnipdv.png
           if-no-files-found: ignore
 
   release:
@@ -90,4 +92,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release create "$RELEASE_TAG" installer/* --verify-tag --title "PDV Sistem $RELEASE_TAG" --generate-notes
+        run: gh release create "$RELEASE_TAG" installer/* --verify-tag --title "OmniPDV $RELEASE_TAG" --generate-notes

@@ -1,6 +1,8 @@
-# PDV Sistem
+# OmniPDV
 
 Aplicativo desktop Electron + React, com banco SQLite local e emissor NFC-e embutido do [Sull-s/fiscal](https://github.com/Sull-s/fiscal).
+
+![Símbolo OmniPDV](assets/brand/icon-256.png)
 
 ## Instalar no Windows — sem comandos
 
@@ -9,8 +11,8 @@ Use Windows 10 ou 11 de 64 bits (x64). **Quem instala o aplicativo não precisa 
 1. Abra [Instalador Windows no GitHub Actions](https://github.com/LucasL-Dev/PDV_Sistem/actions/workflows/windows.yml) e entre na sua conta do GitHub.
 2. Abra a execução mais recente com **✓ verde**. Ao fim da página, em **Artifacts**, baixe **Instalador-Windows**. Se a execução estiver em andamento, aguarde a conclusão; um build com falha não disponibiliza o instalador.
 3. Clique com o botão direito no ZIP baixado e selecione **Extrair tudo**.
-4. Abra `PDV-Sistem-Setup-1.1.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
-5. O aplicativo abre ao terminar. Nas próximas vezes, use o atalho **PDV Sistem** na Área de Trabalho ou no menu Iniciar.
+4. Abra `OmniPDV-Setup-1.2.0-x64.exe` e aguarde a instalação. Ela é feita para o seu usuário, sem escolher pastas ou executar comandos.
+5. O aplicativo abre ao terminar. Nas próximas vezes, use o atalho **OmniPDV** na Área de Trabalho ou no menu Iniciar.
 6. No primeiro acesso, crie o administrador. Cadastre seus produtos e clique em **Abrir caixa** para começar.
 
 Quando houver uma versão publicada em [Releases](https://github.com/LucasL-Dev/PDV_Sistem/releases), você também poderá baixar o `.exe` diretamente por lá, sem o ZIP dos artefatos. O workflow publica Releases quando uma tag `v*` é enviada; um push em `main` gera o artefato de teste. Os artefatos ficam disponíveis por 90 dias. Se não houver execução, o responsável pelo repositório pode abrir **Actions → Instalador Windows → Run workflow**.
@@ -19,7 +21,7 @@ O instalador ainda não tem assinatura digital e o Windows pode mostrar um aviso
 
 ### Atualizar sem reinstalar ferramentas
 
-Feche o PDV, faça backup e execute o instalador da nova versão. Ele reutiliza a instalação do usuário; o banco local e os dados fiscais ficam separados dos arquivos do aplicativo. A desinstalação não apaga os dados da loja. Não há atualizador automático nesta versão.
+Feche o PDV, faça backup e execute o instalador da nova versão. Ele reutiliza a instalação do usuário; o banco local e os dados fiscais ficam separados dos arquivos do aplicativo. A desinstalação não apaga os dados da loja. A versão 1.2.0 passa a se chamar OmniPDV; o identificador de instalação e o diretório legado `pdv-sistem` são preservados para manter vendas, cadastros, certificados e XMLs existentes. Não há atualizador automático nesta versão.
 
 ### Interface simplificada
 
@@ -101,13 +103,13 @@ npx --yes pnpm@9.15.0 build
 
 Esse comando compila a biblioteca fiscal e a interface. Ao terminar com sucesso, a pasta `dist` estará disponível. Se houver erro, resolva-o antes de tentar abrir o aplicativo.
 
-### 6. Abra o PDV Sistem
+### 6. Abra o OmniPDV
 
 ```bat
 npx --yes pnpm@9.15.0 start
 ```
 
-Uma janela do **PDV Sistem** deverá abrir. Mantenha o terminal aberto enquanto usa o aplicativo.
+Uma janela do **OmniPDV** deverá abrir. Mantenha o terminal aberto enquanto usa o aplicativo.
 
 Depois de concluir a primeira instalação, para abrir novamente basta entrar na pasta do projeto e executar o comando `start`. Não é necessário reinstalar nem compilar a cada abertura se o código não mudou.
 
@@ -132,18 +134,18 @@ Para NFC-e, siga a seção [Configuração fiscal](#configuração-fiscal). O ca
 Para usar o PDV, o comando `start` já é suficiente. Se quiser gerar um instalador local, depois do build execute:
 
 ```bat
-npx --yes pnpm@9.15.0 exec electron-builder --win nsis --x64 --config.win.signAndEditExecutable=false
+npx --yes pnpm@9.15.0 exec electron-builder --win nsis --x64 --config.win.signExecutable=false
 ```
 
-Esse comando cria uma versão de desenvolvimento **sem assinatura digital**, sem configurar certificado de assinatura de código. O certificado de assinatura do instalador é diferente do A1 usado para notas fiscais.
+Esse comando cria uma versão de desenvolvimento **sem assinatura digital**, com os recursos do executável (nome e ícone) personalizados e sem configurar certificado de assinatura de código. O certificado de assinatura do instalador é diferente do A1 usado para notas fiscais.
 
 Ao finalizar, procure:
 
 ```text
-release\PDV-Sistem-Setup-1.1.0-x64.exe
+release\OmniPDV-Setup-1.2.0-x64.exe
 ```
 
-Abra esse arquivo para instalar no Windows e use o atalho criado pelo instalador. O computador que apenas executa o aplicativo instalado não precisa de Node.js nem Git. Para distribuir oficialmente, configure assinatura de código e teste o instalador em Windows; não use a opção `signAndEditExecutable=false` como substituto da assinatura.
+Abra esse arquivo para instalar no Windows e use o atalho criado pelo instalador. O computador que apenas executa o aplicativo instalado não precisa de Node.js nem Git. Para distribuir oficialmente, configure assinatura de código e teste o instalador em Windows; a opção `signExecutable=false` permite personalizar nome e ícone, mas não substitui a assinatura digital.
 
 ### 9. Atualize o código posteriormente
 
@@ -235,7 +237,7 @@ O smoke test Electron usa uma pasta vazia exclusiva:
 PDV_SMOKE=/tmp/pdv-smoke-novo npx --yes pnpm@9.15.0 exec electron --ozone-platform=headless --disable-gpu .
 ```
 
-Dentro de contêineres sem sandbox Linux disponível, a conferência automatizada pode exigir `--no-sandbox`; não use essa opção na instalação desktop. O teste cria apenas dados fictícios na pasta indicada, faz login, registra venda pela interface e verifica troco e estoque. A imagem de conferência é salva em `/tmp/pdv-sistem.png`. O cofre fiscal indisponível no contêiner é comunicado na tela; isso não é validação de emissão real.
+Dentro de contêineres sem sandbox Linux disponível, a conferência automatizada pode exigir `--no-sandbox`; não use essa opção na instalação desktop. O teste cria apenas dados fictícios na pasta indicada, faz login, registra venda pela interface e verifica troco e estoque. A imagem de conferência é salva em `/tmp/omnipdv.png`. O cofre fiscal indisponível no contêiner é comunicado na tela; isso não é validação de emissão real.
 
 ## Dependência fiscal
 

@@ -21,6 +21,10 @@ export async function smoke(win) {
       `Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes(${JSON.stringify(label)}))?.click()`,
     );
   await until("document.body.innerText.includes('Crie o administrador')");
+  await until(
+    "document.title === 'OmniPDV' && document.querySelector('.brand-mark')?.naturalWidth > 0",
+  );
+  if (win.getTitle() !== "OmniPDV") throw Error("Nome da janela incorreto.");
   await js(
     `(()=>{const set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;for(const [name,value] of [['name','Administrador'],['login','admin'],['password','smoke-password']]){const input=document.querySelector('[name="'+name+'"]');set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));}document.querySelector('form').requestSubmit();})()`,
   );
@@ -49,8 +53,11 @@ export async function smoke(win) {
   await click("Café especial");
   await click("Chocolate 70%");
   await until("document.body.innerText.includes('R$ 37,80')");
+  await js(
+    "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+  );
   const image = await win.webContents.capturePage();
-  writeFileSync(join(tmpdir(), "pdv-sistem.png"), image.toPNG());
+  writeFileSync(join(tmpdir(), "omnipdv.png"), image.toPNG());
   await click("Ir para pagamento");
   await until("Boolean(document.querySelector('dialog[open]'))");
   await js(

@@ -205,6 +205,8 @@ export function extra(store, s, u, action, p) {
         if (!product || i.qty <= 0) fail("Item inválido.");
         return {
           id: product.id,
+          name: product.name,
+          unit: product.unit || "UN",
           qty: qty(i.qty, {
             fraction: ["KG", "M", "L"].includes(product.unit || "UN"),
           }),

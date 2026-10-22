@@ -406,6 +406,20 @@ export function ShiftReports({ s, api, run }) {
             {s.users.find((u) => u.id === c.authorizedBy)?.name} · {c.reason}
           </p>
         ))}
+      <h3>Cancelamentos fiscais confirmados</h3>
+      {s.audit
+        .filter((a) => a.action === "fiscal.cancel")
+        .slice(-30)
+        .reverse()
+        .map((a) => (
+          <p key={a.id}>
+            {new Date(a.at).toLocaleString("pt-BR")} · Venda {a.details?.sale} ·
+            Operador {s.users.find((u) => u.id === a.user)?.name || a.user} ·
+            Autorizado por{" "}
+            {s.users.find((u) => u.id === a.details?.authorizedBy)?.name ||
+              a.details?.authorizedBy}
+          </p>
+        ))}
     </section>
   );
 }

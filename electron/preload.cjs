@@ -6,9 +6,17 @@ async function invoke(channel, ...args) {
 }
 contextBridge.exposeInMainWorld("pdv", {
   call: (action, payload) => invoke("pdv", action, payload),
-  print: (id) => invoke("receipt", id),
+  print: (id, network = false) => invoke("receipt", id, network),
+  document: (type, id, network = false) =>
+    invoke("document", type, id, network),
+  printers: () => invoke("printers"),
+  pixConfigure: (token) => invoke("pix:configure", token),
+  pixCreate: (checkout, email) => invoke("pix:create", checkout, email),
+  pixCheck: (id) => invoke("pix:check", id),
+  pixCancel: (id) => invoke("pix:cancel", id),
   emit: (id) => invoke("emit", id),
-  cancelFiscal: (id, reason) => invoke("cancelFiscal", id, reason),
+  cancelFiscal: (id, reason, approval) =>
+    invoke("cancelFiscal", id, reason, approval),
   backup: () => invoke("backup"),
 });
 contextBridge.exposeInMainWorld("fiscal", {

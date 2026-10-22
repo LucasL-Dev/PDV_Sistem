@@ -841,3 +841,193 @@ summary {
   width: 100%;
   margin-top: 12px;
 }
+.theme-switch {
+  width: auto;
+  max-width: 175px;
+  font-size: 12px;
+  padding: 7px 9px;
+}
+.auth > .theme-switch {
+  position: absolute;
+  top: 22px;
+  right: 24px;
+}
+.keyboard-help {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 0 0 15px;
+  line-height: 1.8;
+}
+.selected-item {
+  background: #edf4f1;
+  border-radius: 7px;
+}
+.cart-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.cash-bills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 14px;
+}
+.cash-bills button {
+  padding: 9px;
+  font-size: 12px;
+}
+.check {
+  flex-direction: row;
+  align-items: center;
+}
+.check input {
+  width: auto;
+}
+.account {
+  padding: 15px 0;
+  border-top: 1px solid var(--line);
+}
+.pix-panel {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  margin-top: 15px;
+}
+.pix-qr {
+  width: 230px;
+  max-width: 100%;
+  display: block;
+  margin: 15px auto;
+  background: white;
+}
+textarea {
+  width: 100%;
+  min-height: 90px;
+  font: inherit;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 10px;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  color: #e3e9e8;
+  background: #121918;
+  --line: #34423f;
+  --muted: #a9b9b4;
+  --accent: #73bba4;
+  --fiscal-primaria: #73bba4;
+}
+[data-theme="dark"] aside,
+[data-theme="dark"] header,
+[data-theme="dark"] .panel,
+[data-theme="dark"] .auth-card,
+[data-theme="dark"] .cash-tools,
+[data-theme="dark"] dialog {
+  background: #1b2522;
+  color: #e3e9e8;
+  border-color: var(--line);
+}
+[data-theme="dark"] button,
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+  background: #202e29;
+  color: #e3e9e8;
+  border-color: #45584f;
+}
+[data-theme="dark"] input::placeholder {
+  color: #9cafa6;
+}
+[data-theme="dark"] button:hover {
+  background: #30443b;
+  border-color: #80b59f;
+}
+[data-theme="dark"] .primary {
+  background: #79bda4;
+  color: #10251c;
+  border-color: #79bda4;
+}
+[data-theme="dark"] .primary:hover {
+  background: #96d0bb;
+}
+[data-theme="dark"] nav button {
+  color: #b5c5bf;
+  background: transparent;
+}
+[data-theme="dark"] nav .active,
+[data-theme="dark"] .selected-item,
+[data-theme="dark"] .chosen,
+[data-theme="dark"] .avatar {
+  background: #2a4036;
+  color: #b0ddcb;
+}
+[data-theme="dark"] .search,
+[data-theme="dark"] .qty button {
+  background: #15201b;
+}
+[data-theme="dark"] label,
+[data-theme="dark"] .title p,
+[data-theme="dark"] .cart-item small,
+[data-theme="dark"] .product small,
+[data-theme="dark"] .muted,
+[data-theme="dark"] .change,
+[data-theme="dark"] .totals p {
+  color: #a9b9b4;
+}
+[data-theme="dark"] .grand {
+  color: #e4f4ec !important;
+}
+[data-theme="dark"] .product strong,
+[data-theme="dark"] .change b,
+[data-theme="dark"] summary {
+  color: #a9d7c4;
+}
+[data-theme="dark"] .badge {
+  background: #2a3731;
+  color: #c3d0cb;
+}
+[data-theme="dark"] .badge.green {
+  background: #294437;
+  color: #acd8bf;
+}
+[data-theme="dark"] .badge.orange {
+  background: #463b22;
+  color: #e8d4a5;
+}
+[data-theme="dark"] .notice {
+  background: #263f33;
+  color: #c0ddce;
+}
+[data-theme="dark"] .error {
+  background: #4b2927;
+  color: #f0c0bb;
+}
+[data-theme="dark"] .danger {
+  color: #efb4ac;
+  border-color: #81564e;
+}
+[data-theme="dark"] .primary-danger {
+  background: #8f423a;
+  color: white;
+}
+[data-theme="dark"] .fiscal {
+  --fiscal-fundo: #1b2522;
+  --fiscal-fundo-suave: #15201b;
+  --fiscal-texto: #e3e9e8;
+  --fiscal-suave: #a9b9b4;
+  --fiscal-borda: #45584f;
+  --fiscal-destaque: #79bda4;
+  --fiscal-texto-destaque: #10251c;
+  --fiscal-ok: #9ed4ad;
+  --fiscal-aviso: #e8cb87;
+  --fiscal-erro: #f0aaa3;
+}
+[data-theme="light"] .fiscal {
+  --fiscal-fundo: #fff;
+  --fiscal-fundo-suave: #f5f6f8;
+  --fiscal-texto: #202b36;
+  --fiscal-suave: #65727e;
+  --fiscal-borda: #dfe3ea;
+  --fiscal-destaque: #285d53;
+  --fiscal-texto-destaque: #fff;
+}

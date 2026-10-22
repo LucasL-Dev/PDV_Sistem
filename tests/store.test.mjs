@@ -116,7 +116,7 @@ test("permissões e autenticação são aplicadas no banco, sem hashes na tela",
   );
   s.call("login", { login: "caixa", password: "password123" });
   assert.throws(() => s.call("product", p), /administrador/);
-  assert.throws(() => s.call("closeShift", { counted: 0 }), /administrador/);
+  assert.throws(() => s.call("shiftReport", {id:s.read().shifts[0].id,type:"X"}), /gerente/);
   assert.ok(s.call("snapshot").users.every((u) => !u.password));
   sale(s, p);
   s.close();

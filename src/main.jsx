@@ -1,4 +1,15 @@
-import React, { useState, useEffect, useRef } from "react";
+import {
+  ApprovalFields,
+  authorization,
+  ThemeSelect,
+  Settings,
+  Accounts,
+  ShiftReports,
+  PixPanel,
+  labels,
+} from "./Operations.jsx";
+import { fractional, lineValue, scaleBarcode } from "./pos-utils.js";
+import React, { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
 import {
   ProvedorFiscal,
@@ -40,6 +51,8 @@ const nav = [
   ["relatorios", "relatorios", "Relatórios"],
   ["equipe", "equipe", "Funcionários"],
   ["fiscal", "fiscal", "Documentos fiscais"],
+  ["accounts", "clientes", "Caderneta e trocas"],
+  ["settings", "produtos", "Configurações"],
 ];
 const iconPaths = {
   caixa: "M3 3h18v18H3z M3 9h18 M9 9v12",
@@ -70,18 +83,25 @@ function Modal({ title, onClose, children }) {
   const ref = useRef(null);
   useEffect(() => {
     ref.current.showModal();
+    ref.current
+      .querySelector("input:not([type=hidden]),select,textarea")
+      ?.focus();
   }, []);
   return (
     <dialog
       ref={ref}
       onClose={onClose}
+      onCancel={(e) => {
+        e.preventDefault();
+        onClose();
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) ref.current.close();
+        if (e.target === ref.current) onClose();
       }}
     >
       <div className="panel-title">
         <h2>{title}</h2>
-        <button aria-label="Fechar janela" onClick={() => ref.current.close()}>
+        <button aria-label="Fechar janela" onClick={onClose}>
           ×
         </button>
       </div>
@@ -117,7 +137,32 @@ function App() {
     [ambiente, setAmbiente] = useState(2),
     [shiftOpen, setShiftOpen] = useState(false),
     [paymentOpen, setPaymentOpen] = useState(false),
-    [deletion, setDeletion] = useState(null);
+    [deletion, setDeletion] = useState(null),
+    [theme, setTheme] = useState(
+      () => localStorage.getItem("omnipdv-theme") || "system",
+    ),
+    [operation, setOperation] = useState(null),
+    [activeItem, setActiveItem] = useState(null),
+    [approval, setApproval] = useState({ login: "", password: "" }),
+    [activeCharge, setActiveCharge] = useState(null);
+  const searchRef = useRef(null);
+  const saleRef = useRef(saleId);
+  saleRef.current = saleId;
+  useEffect(() => {
+    localStorage.setItem("omnipdv-theme", theme);
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      document.documentElement.dataset.theme =
+        theme === "system" ? (media.matches ? "dark" : "light") : theme;
+    };
+    apply();
+    media.addEventListener("change", apply);
+    return () => media.removeEventListener("change", apply);
+  }, [theme]);
+  useEffect(() => {
+    if (page === "caixa" && s?.me && !document.querySelector("dialog[open]"))
+      searchRef.current?.focus();
+  }, [page, s?.me?.id]);
   useEffect(() => {
     api
       .call("status")
@@ -125,6 +170,13 @@ function App() {
       .catch((e) => setError(e.message));
   }, []);
   const refresh = async () => setS(await api.call("snapshot"));
+  useEffect(() => {
+    if (!s?.me) return;
+    const timer = setInterval(() => {
+      if (!document.querySelector("dialog[open]")) refresh().catch(() => {});
+    }, 12000);
+    return () => clearInterval(timer);
+  }, [s?.me?.id]);
   const run = async (fn, msg = "Operação concluída.") => {
     if (busy) return;
     setBusy(true);
@@ -137,25 +189,88 @@ function App() {
       setNotice(typeof result === "string" ? result : msg);
     } catch (e) {
       setError(e.message);
+      if (s) {
+        try {
+          await refresh();
+        } catch {}
+      }
     } finally {
       setBusy(false);
     }
   };
   const act = (name, p) => api.call(name, p);
-  const admin = s?.me.role === "admin";
+  const admin = ["admin", "manager"].includes(s?.me.role);
   const shift = s?.shifts.find((x) => !x.closedAt);
-  const add = (p) =>
+  const checkoutLocked = Boolean(
+    s?.pixCharges.some(
+      (c) =>
+        c.saleId === saleId &&
+        ["creating", "pending", "approved", "recovery"].includes(c.status),
+    ),
+  );
+  const add = (p, quantity) => {
+    if (checkoutLocked) {
+      setError("Confirme ou cancele o Pix antes de alterar o carrinho.");
+      return;
+    }
+    if (quantity === undefined && fractional(p)) {
+      setOperation({ type: "add", product: p });
+      return;
+    }
+    const n = quantity ?? 1;
+    if (!Number.isFinite(n) || n <= 0) return;
     setCart((c) => {
-      const old = c.find((i) => i.id === p.id);
-      if ((old?.qty || 0) >= p.stock) {
-        setError("Sem estoque disponível.");
+      const old = c.find((i) => i.id === p.id),
+        value = Math.round(((old?.qty || 0) + n) * 1000) / 1000;
+      if (value > p.stock && s.settings.stockPolicy === "block") {
+        setError("Estoque insuficiente: " + p.name);
         return c;
       }
+      if (value > p.stock)
+        setNotice("Atenção: venda com estoque insuficiente.");
+      setActiveItem(p.id);
       return old
-        ? c.map((i) => (i.id === p.id ? { ...i, qty: i.qty + 1 } : i))
-        : [...c, { ...p, qty: 1 }];
+        ? c.map((i) => (i.id === p.id ? { ...i, qty: value } : i))
+        : [...c, { ...p, qty: n }];
     });
-  const subtotal = cart.reduce((a, i) => a + i.price * i.qty, 0),
+    queueMicrotask(() => searchRef.current?.focus());
+  };
+  const changeQty = (i, value) =>
+    !checkoutLocked && setOperation({ type: "quantity", product: i, value });
+  const finishSale = (v) => {
+    setCart([]);
+    setPaymentOpen(false);
+    setPayments([{ forma: "dinheiro", value: "" }]);
+    setDiscount("0");
+    setApproval({ login: "", password: "" });
+    setActiveCharge(null);
+    setSaleId(crypto.randomUUID());
+    setSelected(v.id);
+    setPage("vendas");
+  };
+  useEffect(() => {
+    if (!cart.length) return;
+    const charge = s?.pixCharges.find(
+      (c) => c.saleId === saleId && c.status === "completed",
+    );
+    if (charge) {
+      const sale = s.sales.find((v) => v.id === charge.sale);
+      if (sale) {
+        finishSale(sale);
+        setError("");
+        setNotice("Pix confirmado e venda concluída automaticamente.");
+      }
+    }
+  }, [s?.pixCharges]);
+  const checkout = {
+    id: saleId,
+    items: cart.map((i) => ({ id: i.id, qty: i.qty })),
+    customer,
+    discount: cents(discount),
+    payments: payments.map((p) => ({ forma: p.forma, amount: cents(p.value) })),
+    approval,
+  };
+  const subtotal = cart.reduce((a, i) => a + lineValue(i.price, i.qty), 0),
     total = subtotal - (Number(discount.replace(",", ".")) * 100 || 0),
     paid = payments.reduce(
       (a, p) => a + (Number(p.value.replace(",", ".")) * 100 || 0),
@@ -163,23 +278,10 @@ function App() {
     );
   const saveSale = () =>
     run(async () => {
-      const v = await act("sale", {
-        id: saleId,
-        items: cart.map((i) => ({ id: i.id, qty: i.qty })),
-        customer,
-        discount: cents(discount),
-        payments: payments.map((p) => ({
-          forma: p.forma,
-          amount: cents(p.value),
-        })),
-      });
-      setCart([]);
-      setPaymentOpen(false);
-      setPayments([{ forma: "dinheiro", value: "" }]);
-      setDiscount("0");
-      setSaleId(crypto.randomUUID());
-      setSelected(v.id);
-      setPage("vendas");
+      const v = await act("sale", checkout);
+      finishSale(v);
+      if (v.warnings?.length)
+        return "Venda concluída com alerta: " + v.warnings.join("; ");
     }, "Venda concluída. Estoque atualizado; recibo e emissão fiscal disponíveis.");
   const remove = () =>
     run(async () => {
@@ -202,9 +304,121 @@ function App() {
       await refresh();
       return `NFC-e: ${r.situacao}. ${r.motivo || ""}`;
     }, "Consulte o resultado fiscal na venda.");
+  useLayoutEffect(() => {
+    const key = (e) => {
+      if (!s) return;
+      const dialog = document.querySelector("dialog[open]");
+      if (dialog) {
+        if (e.key === "F2" && paymentOpen) {
+          e.preventDefault();
+          if (
+            !s.settings.pixEnabled ||
+            !payments.some((p) => p.forma === "pix")
+          )
+            saveSale();
+        }
+        return;
+      }
+      if (page !== "caixa") return;
+      if (checkoutLocked && ["F3", "F4", "F12", "Escape"].includes(e.key)) {
+        e.preventDefault();
+        setError("Confirme ou cancele o Pix antes de alterar a venda.");
+        return;
+      }
+      const last = cart.find((i) => i.id === activeItem) || cart.at(-1);
+      if (["F1", "F2", "F3", "F4", "F6", "F12", "Escape"].includes(e.key))
+        e.preventDefault();
+      switch (e.key) {
+        case "F1":
+          searchRef.current?.focus();
+          break;
+        case "F2":
+          if (cart.length && shift) setPaymentOpen(true);
+          break;
+        case "F3":
+          if (last) setOperation({ type: "cancel", product: last });
+          break;
+        case "F4":
+          document.querySelector(".sale-options").open = true;
+          document.querySelector(".sale-options input")?.focus();
+          break;
+        case "F6":
+          setOperation({ type: "lookup" });
+          break;
+        case "F12":
+          if (last) changeQty(last, last.qty);
+          break;
+        case "Escape":
+          if (cart.length) setOperation({ type: "cancelAll" });
+          break;
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  });
+  const confirmOperation = (form) => {
+    const data = fields(form),
+      op = operation;
+    run(async () => {
+      if (op.type === "lookup") return;
+      if (op.type === "add") {
+        add(op.product, Number(data.qty));
+        setOperation(null);
+        return "Quantidade adicionada.";
+      }
+      const current = cart.find((i) => i.id === op.product?.id);
+      const value = op.type === "quantity" ? Number(data.qty) : 0;
+      if (
+        op.type === "quantity" &&
+        (!Number.isFinite(value) ||
+          value < 0 ||
+          Math.abs(value * 1000 - Math.round(value * 1000)) > 0.00001 ||
+          (!fractional(current) && !Number.isInteger(value)))
+      )
+        throw Error("Quantidade inválida.");
+      if (
+        op.type === "quantity" &&
+        value > current.stock &&
+        s.settings.stockPolicy === "block"
+      )
+        throw Error("Estoque insuficiente.");
+      const removed =
+        op.type === "cancelAll"
+          ? cart
+          : current && value < current.qty
+            ? [
+                {
+                  ...current,
+                  qty: Math.round((current.qty - value) * 1000) / 1000,
+                },
+              ]
+            : [];
+      if (removed.length)
+        await act("cancelDraft", {
+          draftId: saleId,
+          items: removed.map((i) => ({ id: i.id, qty: i.qty })),
+          reason: data.reason,
+          approval: authorization(data),
+        });
+      setCart((c) =>
+        op.type === "cancelAll"
+          ? []
+          : c
+              .map((i) => (i.id === current.id ? { ...i, qty: value } : i))
+              .filter((i) => i.qty > 0),
+      );
+      setOperation(null);
+      if (op.type === "cancelAll") setSaleId(crypto.randomUUID());
+      queueMicrotask(() => searchRef.current?.focus());
+      return op.type === "quantity" && value > current.stock
+        ? "Quantidade alterada. Atenção: estoque insuficiente."
+        : "Operação registrada.";
+    });
+  };
   if (!s)
     return (
       <div className="auth">
+        <ThemeSelect value={theme} onChange={setTheme} />
         <div className="brand">
           <img className="brand-mark" src={logo} alt="" /> OmniPDV
         </div>
@@ -270,16 +484,14 @@ function App() {
           <small className="section-label">MENU</small>
           <nav>
             {nav
-              .filter(
-                ([id]) =>
-                  admin ||
-                  ![
-                    "produtos",
-                    "clientes",
-                    "equipe",
-                    "relatorios",
-                    "fiscal",
-                  ].includes(id),
+              .filter(([id]) =>
+                ["settings", "equipe"].includes(id)
+                  ? s.me.role === "admin"
+                  : ["produtos", "clientes", "relatorios", "fiscal"].includes(
+                        id,
+                      )
+                    ? admin
+                    : true,
               )
               .map(([id, icon, title]) => (
                 <button
@@ -300,12 +512,25 @@ function App() {
           </nav>
           <div className="side-bottom">
             <b>{s.me.name}</b>
-            <small>{admin ? "Administrador" : "Operador de caixa"}</small>
+            <small>
+              {
+                {
+                  admin: "Administrador",
+                  manager: "Gerente",
+                  supervisor: "Supervisor",
+                  cashier: "Operador de caixa",
+                }[s.me.role]
+              }
+            </small>
             <button
               onClick={() =>
                 run(async () => {
                   await act("logout");
                   setS(null);
+                  setPage("caixa");
+                  setPaymentOpen(false);
+                  setOperation(null);
+                  setActiveCharge(null);
                   setSetup(false);
                   setCart([]);
                   setSelected(null);
@@ -326,10 +551,21 @@ function App() {
               <span className={"badge " + (shift ? "green" : "")}>
                 {shift ? "● Caixa aberto" : "○ Caixa fechado"}
               </span>
+              <ThemeSelect value={theme} onChange={setTheme} />
               <span className="avatar">{s.me.name[0].toUpperCase()}</span>
             </div>
           </header>
-          <main>
+          <main
+            onClick={(e) => {
+              if (
+                page === "caixa" &&
+                !e.target.closest(
+                  "button,input,select,textarea,label,summary,dialog,a",
+                )
+              )
+                searchRef.current?.focus();
+            }}
+          >
             <div className="title">
               <div>
                 <h1>{nav.find((n) => n[0] === page)?.[2]}</h1>
@@ -435,14 +671,25 @@ function App() {
                           onSubmit={(e) => {
                             e.preventDefault();
                             const p = fields(e.currentTarget);
-                            run(
-                              () =>
-                                act("movement", {
-                                  ...p,
-                                  amount: cents(p.amount),
-                                }),
-                              "Movimento registrado.",
-                            );
+                            run(async () => {
+                              const r = await act("movement", {
+                                ...p,
+                                amount: cents(p.amount),
+                              });
+                              try {
+                                await api.document(
+                                  "movement",
+                                  r.id,
+                                  Boolean(s.settings.thermalHost),
+                                );
+                              } catch (error) {
+                                throw Error(
+                                  "Movimento registrado. Falha ao imprimir: " +
+                                    error.message +
+                                    " Reimprima em Gerenciar caixa.",
+                                );
+                              }
+                            }, "Movimento registrado.");
                           }}
                         >
                           <label>
@@ -467,9 +714,35 @@ function App() {
                           <Input label="Motivo" name="reason" required />
                           <button disabled={busy}>Registrar movimento</button>
                         </form>
-                        {admin && (
+                        {shift.movements.map((m) => (
+                          <div className="list-row" key={m.id || m.at}>
+                            <span>
+                              {m.type} · {money(m.amount)}
+                            </span>
+                            <button
+                              onClick={() =>
+                                run(
+                                  () =>
+                                    api.document(
+                                      "movement",
+                                      m.id,
+                                      Boolean(s.settings.thermalHost),
+                                    ),
+                                  "Comprovante enviado.",
+                                )
+                              }
+                            >
+                              Reimprimir
+                            </button>
+                          </div>
+                        ))}
+                        {true && (
                           <section className="close-shift">
-                            <h3>Fechar caixa</h3>
+                            <h3>Fechamento cego</h3>
+                            <p className="muted">
+                              Informe o dinheiro e os comprovantes contados. A
+                              conferência ficará disponível ao gerente.
+                            </p>
                             <form
                               onSubmit={(e) => {
                                 e.preventDefault();
@@ -477,20 +750,37 @@ function App() {
                                 run(
                                   () =>
                                     act("closeShift", {
-                                      counted: cents(p.counted),
+                                      countedPayments: Object.fromEntries(
+                                        [
+                                          "dinheiro",
+                                          "pix",
+                                          "credito",
+                                          "debito",
+                                          "fiado",
+                                        ].map((m) => [m, cents(p[m])]),
+                                      ),
                                     }),
-                                  "Caixa fechado. Confira a diferença no relatório.",
+                                  "Caixa fechado. Conferência encaminhada ao gerente.",
                                 );
                               }}
                             >
-                              <Input
-                                label="Dinheiro contado (R$)"
-                                name="counted"
-                                type="number"
-                                min="0"
-                                step="0.01"
-                                required
-                              />
+                              {[
+                                "dinheiro",
+                                "pix",
+                                "credito",
+                                "debito",
+                                "fiado",
+                              ].map((m) => (
+                                <Input
+                                  key={m}
+                                  label={labels[m] + " contado (R$)"}
+                                  name={m}
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  required
+                                />
+                              ))}
                               <button disabled={busy}>
                                 Confirmar fechamento
                               </button>
@@ -501,6 +791,41 @@ function App() {
                     )}
                   </Modal>
                 )}
+                {s.pixCharges
+                  .filter(
+                    (c) =>
+                      ["creating", "pending", "approved", "recovery"].includes(
+                        c.status,
+                      ) &&
+                      (c.user === s.me.id || admin),
+                  )
+                  .map((c) => (
+                    <div className="notice" key={c.id}>
+                      Pix em andamento · {money(c.amount)}{" "}
+                      <button
+                        onClick={() => {
+                          setCart(c.items);
+                          setPayments(
+                            c.checkout.payments.map((p) => ({
+                              forma: p.forma,
+                              value: (p.amount / 100).toFixed(2),
+                            })),
+                          );
+                          setDiscount((c.checkout.discount / 100).toFixed(2));
+                          setCustomer(c.checkout.customer || "");
+                          setSaleId(c.saleId);
+                          setActiveCharge(c);
+                          setPaymentOpen(true);
+                        }}
+                      >
+                        Retomar cobrança
+                      </button>
+                    </div>
+                  ))}
+                <div className="keyboard-help">
+                  F1 Buscar · F2 Pagar · F3 Cancelar item · F4 Desconto · F6
+                  Consultar · F12 Quantidade/peso · Esc Cancelar
+                </div>
                 <div className="pos-grid">
                   <section className="panel catalog">
                     <div className="panel-title">
@@ -512,14 +837,28 @@ function App() {
                     <form
                       onSubmit={(e) => {
                         e.preventDefault();
+                        if (!query.trim()) return;
                         const p = s.products.find((p) => p.barcode === query);
-                        if (p) {
-                          add(p);
-                          setQuery("");
+                        const weighed =
+                          s.settings.scaleLabels &&
+                          !p &&
+                          scaleBarcode(query, s.products);
+                        if (p) add(p);
+                        else if (weighed) add(weighed.product, weighed.qty);
+                        else {
+                          const first = s.products.find((p) =>
+                            (p.name + " " + p.barcode)
+                              .toLowerCase()
+                              .includes(query.toLowerCase()),
+                          );
+                          if (first) add(first);
                         }
+                        setQuery("");
+                        searchRef.current?.focus();
                       }}
                     >
                       <input
+                        ref={searchRef}
                         className="search"
                         aria-label="Buscar produto ou código de barras"
                         placeholder="Buscar produto ou ler código de barras"
@@ -539,11 +878,14 @@ function App() {
                             className="product"
                             key={p.id}
                             onClick={() => add(p)}
-                            disabled={!p.stock}
+                            disabled={
+                              s.settings.stockPolicy === "block" && p.stock <= 0
+                            }
                           >
                             <b>{p.name}</b>
                             <small>
-                              {p.category} · {p.stock} em estoque
+                              {p.category} · {p.stock} {p.unit || "UN"} em
+                              estoque
                             </small>
                             <strong>
                               {money(p.price)} <span aria-hidden="true">+</span>
@@ -596,6 +938,7 @@ function App() {
                       </label>
                       <Input
                         label="Desconto (R$)"
+                        disabled={checkoutLocked}
                         type="number"
                         min="0"
                         step="0.01"
@@ -612,23 +955,32 @@ function App() {
                         </div>
                       )}
                       {cart.map((i) => (
-                        <div className="cart-item" key={i.id}>
+                        <div
+                          className={
+                            "cart-item " +
+                            (activeItem === i.id ? "selected-item" : "")
+                          }
+                          key={i.id}
+                          tabIndex="0"
+                          onFocus={() => setActiveItem(i.id)}
+                          onClick={() => setActiveItem(i.id)}
+                        >
                           <div>
                             <b>{i.name}</b>
-                            <small>{money(i.price)} / un.</small>
+                            <small>
+                              {money(i.price)} / {i.unit || "UN"}
+                            </small>
                           </div>
                           <div className="qty">
                             <button
                               aria-label={"Diminuir " + i.name}
                               onClick={() =>
-                                setCart((c) =>
-                                  c
-                                    .map((x) =>
-                                      x.id === i.id
-                                        ? { ...x, qty: x.qty - 1 }
-                                        : x,
-                                    )
-                                    .filter((x) => x.qty > 0),
+                                changeQty(
+                                  i,
+                                  Math.max(
+                                    0,
+                                    i.qty - (fractional(i) ? 0.001 : 1),
+                                  ),
                                 )
                               }
                             >
@@ -642,7 +994,7 @@ function App() {
                               +
                             </button>
                           </div>
-                          <b>{money(i.price * i.qty)}</b>
+                          <b>{money(lineValue(i.price, i.qty))}</b>
                         </div>
                       ))}
                     </div>
@@ -671,7 +1023,11 @@ function App() {
                     {paymentOpen && (
                       <Modal
                         title="Pagamento"
-                        onClose={() => setPaymentOpen(false)}
+                        onClose={() => {
+                          setPaymentOpen(false);
+                          setApproval({ login: "", password: "" });
+                          refresh();
+                        }}
                       >
                         <div className="payment-total">
                           <small>Total da venda</small>
@@ -684,12 +1040,13 @@ function App() {
                         )}
 
                         <small className="muted">
-                          Registre após confirmar o recebimento.
+                          Confirme os pagamentos manuais antes de concluir.
                         </small>
                         {payments.map((p, i) => (
                           <div className="payment" key={i}>
                             <select
                               aria-label="Forma de pagamento"
+                              disabled={checkoutLocked}
                               value={p.forma}
                               onChange={(e) =>
                                 setPayments((v) =>
@@ -707,6 +1064,8 @@ function App() {
                                 ["credito", "Crédito"],
                                 ["debito", "Débito"],
                                 ["outros", "Outros"],
+                                ["fiado", "Fiado"],
+                                ["creditoloja", "Crédito da loja"],
                               ].map(([id, t]) => (
                                 <option key={id} value={id}>
                                   {t}
@@ -715,6 +1074,7 @@ function App() {
                             </select>
                             <input
                               aria-label="Valor pago"
+                              disabled={checkoutLocked}
                               type="number"
                               min="0.01"
                               step="0.01"
@@ -733,6 +1093,7 @@ function App() {
                             {payments.length > 1 && (
                               <button
                                 aria-label="Remover pagamento"
+                                disabled={checkoutLocked}
                                 onClick={() =>
                                   setPayments((v) =>
                                     v.filter((_, n) => n !== i),
@@ -746,6 +1107,7 @@ function App() {
                         ))}
                         <button
                           className="link"
+                          disabled={checkoutLocked}
                           onClick={() =>
                             setPayments((p) => [
                               ...p,
@@ -755,13 +1117,108 @@ function App() {
                         >
                           + Dividir pagamento
                         </button>
+                        <div className="cash-bills">
+                          {[20, 50, 100, "Exato"].map((value) => (
+                            <button
+                              key={value}
+                              disabled={checkoutLocked}
+                              onClick={() => {
+                                const other = payments
+                                  .filter((p) => p.forma !== "dinheiro")
+                                  .reduce((a, p) => a + cents(p.value), 0);
+                                const amount =
+                                  value === "Exato"
+                                    ? Math.max(0, total - other)
+                                    : value * 100;
+                                setPayments((p) => [
+                                  {
+                                    forma: "dinheiro",
+                                    value: (amount / 100).toFixed(2),
+                                  },
+                                  ...p.filter((x) => x.forma !== "dinheiro"),
+                                ]);
+                              }}
+                            >
+                              {value === "Exato"
+                                ? "Valor exato"
+                                : "R$ " + value}
+                            </button>
+                          ))}
+                        </div>
+                        <details className="approval">
+                          <summary>Autorizar desconto acima do limite</summary>
+                          <label>
+                            Login do supervisor
+                            <input
+                              value={approval.login}
+                              onChange={(e) =>
+                                setApproval((a) => ({
+                                  ...a,
+                                  login: e.target.value,
+                                }))
+                              }
+                              autoComplete="off"
+                            />
+                          </label>
+                          <label>
+                            Senha do supervisor
+                            <input
+                              type="password"
+                              value={approval.password}
+                              onChange={(e) =>
+                                setApproval((a) => ({
+                                  ...a,
+                                  password: e.target.value,
+                                }))
+                              }
+                              autoComplete="new-password"
+                            />
+                          </label>
+                        </details>
+                        {customer && (
+                          <p className="muted">
+                            Crédito disponível:{" "}
+                            {money(
+                              s.storeCredits
+                                .filter((c) => c.customer === customer)
+                                .reduce((a, c) => a + c.balance, 0),
+                            )}
+                          </p>
+                        )}
+                        {s.settings.pixEnabled &&
+                          payments.some((p) => p.forma === "pix") && (
+                            <PixPanel
+                              api={api}
+                              checkout={checkout}
+                              initial={activeCharge}
+                              onChanged={() => refresh()}
+                              onReset={() => {
+                                setSaleId(crypto.randomUUID());
+                                setActiveCharge(null);
+                              }}
+                              run={run}
+                              onSale={async (v) => {
+                                if (saleRef.current === v.id) finishSale(v);
+                                await refresh();
+                                setNotice(
+                                  "Pix confirmado e venda concluída automaticamente.",
+                                );
+                              }}
+                            />
+                          )}
                         <p className="change">
                           {paid >= total ? "Troco" : "Falta receber"}{" "}
                           <b>{money(Math.abs(paid - total))}</b>
                         </p>
                         <button
                           className="primary checkout"
-                          disabled={busy || !shift || !cart.length}
+                          disabled={
+                            busy ||
+                            !shift ||
+                            !cart.length ||
+                            (s.settings.pixEnabled &&
+                              payments.some((p) => p.forma === "pix"))
+                          }
                           onClick={saveSale}
                         >
                           {busy ? "Processando…" : "Concluir venda"}{" "}
@@ -830,14 +1287,26 @@ function App() {
                           required
                         />
                         <Input
-                          label="Estoque (unidades inteiras)"
+                          label="Estoque na unidade do produto"
                           name="stock"
+                          step="0.001"
                           type="number"
                           min="0"
                           defaultValue={editing?.stock ?? 0}
                           required
                         />
                       </div>
+                      <label>
+                        Unidade de medida
+                        <select
+                          name="unit"
+                          defaultValue={editing?.unit || "UN"}
+                        >
+                          {["UN", "KG", "M", "L", "CX", "FD"].map((u) => (
+                            <option key={u}>{u}</option>
+                          ))}
+                        </select>
+                      </label>
                       <details className="tax-fields">
                         <summary>Dados fiscais para NFC-e</summary>
                         <p className="muted">
@@ -956,7 +1425,11 @@ function App() {
                         e.preventDefault();
                         const p = fields(e.currentTarget);
                         run(async () => {
-                          await act("customer", { ...p, id: editing?.id });
+                          await act("customer", {
+                            ...p,
+                            id: editing?.id,
+                            creditLimit: cents(p.creditLimit),
+                          });
                           setEditing(null);
                         });
                       }}
@@ -977,6 +1450,15 @@ function App() {
                           label="Telefone"
                           name="phone"
                           defaultValue={editing?.phone}
+                        />
+                        <Input
+                          label="Limite de fiado pré-aprovado (R$)"
+                          name="creditLimit"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          defaultValue={(editing?.creditLimit || 0) / 100}
+                          required
                         />
                       </div>
                       <button className="primary" disabled={busy}>
@@ -1074,6 +1556,8 @@ function App() {
                             defaultValue={editing?.role || "cashier"}
                           >
                             <option value="cashier">Operador de caixa</option>
+                            <option value="supervisor">Supervisor</option>
+                            <option value="manager">Gerente</option>
                             <option value="admin">Administrador</option>
                           </select>
                         </label>
@@ -1115,7 +1599,14 @@ function App() {
                           <b>{u.name}</b>
                           <small>
                             {u.login} ·{" "}
-                            {u.role === "admin" ? "Administrador" : "Operador"}{" "}
+                            {
+                              {
+                                admin: "Administrador",
+                                manager: "Gerente",
+                                supervisor: "Supervisor",
+                                cashier: "Operador",
+                              }[u.role]
+                            }{" "}
                             · {u.active ? "Ativo" : "Inativo"}
                           </small>
                         </div>
@@ -1243,7 +1734,7 @@ function App() {
                               <td>
                                 {i.qty} <small>{i.returned} devolvido(s)</small>
                               </td>
-                              <td>{money(i.price * i.qty)}</td>
+                              <td>{money(lineValue(i.price, i.qty))}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -1281,7 +1772,11 @@ function App() {
                         <button
                           onClick={() =>
                             run(
-                              () => api.print(selectedSale.id),
+                              () =>
+                                api.print(
+                                  selectedSale.id,
+                                  Boolean(s.settings.thermalHost),
+                                ),
                               "Recibo aberto para impressão.",
                             )
                           }
@@ -1311,7 +1806,7 @@ function App() {
                           )}
                         </div>
                       )}
-                      {admin &&
+                      {true &&
                         (!selectedSale.fiscal ||
                           ["cancelada", "rejeitada"].includes(
                             selectedSale.fiscal.situacao,
@@ -1319,7 +1814,7 @@ function App() {
                         selectedSale.items.some((i) => i.returned < i.qty) && (
                           <details>
                             <summary>
-                              Registrar devolução ou cancelamento integral
+                              Devolução, troca ou cancelamento integral
                             </summary>
                             <p>
                               Selecione quantidades devolvidas. O estoque será
@@ -1336,6 +1831,7 @@ function App() {
                                       id: selectedSale.id,
                                       reason: p.reason,
                                       method: p.method,
+                                      approval: authorization(p),
                                       items: selectedSale.items
                                         .map((i) => ({
                                           id: i.id,
@@ -1351,12 +1847,17 @@ function App() {
                                 <Input
                                   key={i.id}
                                   label={
-                                    i.name + ` (saldo ${i.qty - i.returned})`
+                                    i.name +
+                                    ` (saldo ${Math.round((i.qty - i.returned) * 1000) / 1000})`
                                   }
                                   name={i.id}
+                                  step={fractional(i) ? "0.001" : "1"}
                                   type="number"
                                   min="0"
-                                  max={i.qty - i.returned}
+                                  max={
+                                    Math.round((i.qty - i.returned) * 1000) /
+                                    1000
+                                  }
                                   defaultValue="0"
                                 />
                               ))}
@@ -1373,8 +1874,12 @@ function App() {
                                   <option value="pix">Pix</option>
                                   <option value="credito">Crédito</option>
                                   <option value="debito">Débito</option>
+                                  <option value="creditoloja">
+                                    Crédito para troca na loja
+                                  </option>
                                 </select>
                               </label>
+                              <ApprovalFields />
                               <button disabled={busy}>
                                 Confirmar devolução
                               </button>
@@ -1383,12 +1888,18 @@ function App() {
                         )}
                       {selectedSale.returns.map((r) => (
                         <div className="notice" key={r.id}>
-                          Devolução: {money(r.refund)} · {r.method} ·{" "}
+                          Devolução: {money(r.value ?? r.refund)} · {r.method} ·{" "}
                           {date(r.at)}
                           <p>{r.reason}</p>
+                          {r.debtReduction > 0 && (
+                            <p>
+                              Caderneta abatida: {money(r.debtReduction)} ·
+                              Reembolso/crédito efetivo: {money(r.refund)}
+                            </p>
+                          )}
                         </div>
                       ))}
-                      {admin &&
+                      {true &&
                         selectedSale.fiscal?.chave &&
                         selectedSale.fiscal.situacao !== "cancelada" && (
                           <details>
@@ -1398,7 +1909,11 @@ function App() {
                                 e.preventDefault();
                                 const p = fields(e.currentTarget);
                                 run(() =>
-                                  api.cancelFiscal(selectedSale.id, p.reason),
+                                  api.cancelFiscal(
+                                    selectedSale.id,
+                                    p.reason,
+                                    authorization(p),
+                                  ),
                                 );
                               }}
                             >
@@ -1414,6 +1929,7 @@ function App() {
                                 integral para repor estoque e contabilizar o
                                 reembolso.
                               </p>
+                              <ApprovalFields />
                               <button disabled={busy}>
                                 Solicitar cancelamento fiscal
                               </button>
@@ -1453,6 +1969,7 @@ function App() {
                   </button>
                 </div>
                 <Reports s={s} day={day} />
+                <ShiftReports s={s} api={api} run={run} />
               </>
             )}
             {page === "fiscal" && (
@@ -1509,6 +2026,97 @@ function App() {
                 )}
               </section>
             )}
+            {page === "settings" && s.me.role === "admin" && (
+              <Settings s={s} api={api} run={run} />
+            )}
+            {page === "accounts" && <Accounts s={s} api={api} run={run} />}
+            {operation && (
+              <Modal
+                key={operation.type + (operation.product?.id || "")}
+                title={
+                  operation.type === "lookup"
+                    ? "Consulta rápida de estoque"
+                    : operation.type === "add"
+                      ? "Informar peso / quantidade"
+                      : operation.type === "quantity"
+                        ? "Alterar quantidade"
+                        : "Cancelar pré-venda"
+                }
+                onClose={() => {
+                  setOperation(null);
+                  queueMicrotask(() => searchRef.current?.focus());
+                }}
+              >
+                {error && <p className="error">{error}</p>}
+                {operation.type === "lookup" ? (
+                  <>
+                    <input
+                      aria-label="Consultar estoque"
+                      placeholder="Nome ou código"
+                      onChange={(e) =>
+                        setOperation((o) => ({ ...o, query: e.target.value }))
+                      }
+                    />
+                    <table>
+                      <tbody>
+                        {s.products
+                          .filter((p) =>
+                            (p.name + " " + p.barcode)
+                              .toLowerCase()
+                              .includes((operation.query || "").toLowerCase()),
+                          )
+                          .slice(0, 20)
+                          .map((p) => (
+                            <tr key={p.id}>
+                              <td>{p.name}</td>
+                              <td>{money(p.price)}</td>
+                              <td>
+                                {p.stock} {p.unit || "UN"}
+                              </td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </>
+                ) : (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      confirmOperation(e.currentTarget);
+                    }}
+                  >
+                    {["add", "quantity"].includes(operation.type) && (
+                      <Input
+                        label={
+                          "Quantidade / peso (" +
+                          (operation.product.unit || "UN") +
+                          ")"
+                        }
+                        name="qty"
+                        type="number"
+                        min={operation.type === "quantity" ? "0" : "0.001"}
+                        step={fractional(operation.product) ? "0.001" : "1"}
+                        defaultValue={operation.value ?? ""}
+                        required
+                      />
+                    )}
+                    {operation.type !== "add" && (
+                      <>
+                        <Input
+                          label="Motivo da redução/cancelamento (mínimo 5 caracteres)"
+                          name="reason"
+                          minLength="5"
+                        />
+                        <ApprovalFields />
+                      </>
+                    )}
+                    <button className="primary" disabled={busy}>
+                      Confirmar operação
+                    </button>
+                  </form>
+                )}
+              </Modal>
+            )}
             {deletion && (
               <Modal
                 title={deletion.title}
@@ -1564,13 +2172,13 @@ function Reports({ s, day }) {
       .flatMap((v) => v.returns)
       .filter((r) => localDay(r.at) === day),
     gross = sales.reduce((a, v) => a + v.total, 0),
-    refunds = returns.reduce((a, r) => a + r.refund, 0),
+    refunds = returns.reduce((a, r) => a + (r.value ?? r.refund), 0),
     products = {};
   sales.forEach((v) =>
     v.items.forEach((i) => {
       const p = products[i.id] || { name: i.name, qty: 0, total: 0 };
       p.qty += i.qty;
-      p.total += i.qty * i.price;
+      p.total += lineValue(i.price, i.qty);
       products[i.id] = p;
     }),
   );

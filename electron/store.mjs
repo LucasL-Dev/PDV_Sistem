@@ -132,6 +132,7 @@ export class Store {
     };
   }
   call(action, p = {}) {
+    this.authorize?.(action);
     if (action === "bootstrap")
       return this.mutate((s) => {
         if (s.users.length) fail("Administrador já configurado.");

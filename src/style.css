@@ -1048,3 +1048,9 @@ textarea {
   .payment-dialog .payment { flex-wrap: wrap; }
   .payment-dialog .payment select, .payment-dialog .payment input { flex: 1 1 130px; width: auto; }
 }
+
+.license-screen { min-height: 100vh; display: grid; place-items: center; padding: 32px; }
+.license-screen .panel { width: min(100%, 520px); display: grid; gap: 18px; padding: 32px; }
+.license-screen p { line-height: 1.6; margin: 0; }
+.license-banner { padding: 12px 24px; background: #e4f1e9; color: #173c2d; display: flex; align-items: center; flex-wrap: wrap; gap: 14px; }
+.license-banner button { padding: 8px 12px; }

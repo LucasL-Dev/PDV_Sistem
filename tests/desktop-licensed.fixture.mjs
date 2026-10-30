@@ -7,7 +7,7 @@ import { SignJWT, exportJWK } from 'jose';
 import { join } from 'node:path';
 import { ProtectedStorage } from '../electron/licensing/storage.mjs';
 if (!process.env.PDV_SMOKE || process.platform!=='win32') throw Error('Use esta fixture apenas no teste Windows com pasta temporária.');
-await app.whenReady();
+app.whenReady().then(async () => {
 const {privateKey,publicKey}=generateKeyPairSync('ed25519');
 const key={...await exportJWK(publicKey),kid:'ui-test',alg:'EdDSA',use:'sig'};
 const installation_id=randomBytes(24).toString('base64url');
@@ -36,3 +36,5 @@ origin=`http://127.0.0.1:${server.address().port}`;
 process.env.OMNIPDV_LICENSE_ORIGIN=origin;
 await new ProtectedStorage(join(process.env.PDV_SMOKE,'licensing/session.bin'),safeStorage).save({installation_id,origin,session,lastTime:Date.now()});
 await import('../electron/main.mjs');
+
+}).catch(() => { console.error("Falha na fixture de licença/DPAPI."); app.exit(1); });

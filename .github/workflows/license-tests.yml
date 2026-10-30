@@ -1,0 +1,35 @@
+name: Testes do licenciamento desktop
+on:
+  pull_request:
+  push:
+    branches: [feat/desktop-subscription-license]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - run: npm install --global pnpm@9.15.0
+      - run: pnpm install --frozen-lockfile
+      - run: node node_modules/electron/install.js
+      - run: pnpm test
+      - run: pnpm build
+      - name: Testar bloqueio e recuperação na interface real
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'omnipdv-license-smoke'
+          pnpm exec electron .
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar interface comercial com licença sintética válida e DPAPI
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'omnipdv-licensed-ui'
+          pnpm exec electron tests/desktop-licensed.fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

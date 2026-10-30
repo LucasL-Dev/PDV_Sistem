@@ -1,3 +1,4 @@
+import { LicenseGate } from "./LicenseGate.jsx";
 import {
   ApprovalFields,
   authorization,
@@ -2286,4 +2287,4 @@ function Reports({ s, day }) {
     </>
   );
 }
-createRoot(document.getElementById("root")).render(<App />);
+createRoot(document.getElementById("root")).render(<LicenseGate><App /></LicenseGate>);

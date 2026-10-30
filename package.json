@@ -17,6 +17,7 @@
     "@fiscal/agente": "workspace:*",
     "@fiscal/ui": "workspace:*",
     "exceljs": "4.4.0",
+    "jose": "6.2.14",
     "react": "18.3.1",
     "react-dom": "18.3.1"
   },

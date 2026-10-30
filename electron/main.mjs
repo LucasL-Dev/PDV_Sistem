@@ -1,9 +1,15 @@
+import { licenseConfig } from "./licensing/config.mjs";
+import { LicenseClient } from "./licensing/client.mjs";
+import { LicenseManager } from "./licensing/manager.mjs";
+import { ProtectedStorage } from "./licensing/storage.mjs";
+import { authorization } from "./licensing/loopback.mjs";
+import { checkOperation, checkFiscal } from "./licensing/policy.mjs";
 import { exportWorkbook } from "./export.mjs";
 import { MercadoPago, verifiedPayment } from "./pix.mjs";
 import { reservePix, finalizePix } from "./pix-flow.mjs";
 import { sendThermal } from "./thermal.mjs";
 import { ranks, lineTotal, approve } from "./operations.mjs";
-import { app, BrowserWindow, ipcMain, safeStorage, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, safeStorage, dialog, shell } from "electron";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -20,13 +26,13 @@ import { iniciarAgente, chaveMestraProtegida } from "@fiscal/agente";
 app.setName("OmniPDV");
 app.setPath(
   "userData",
-  process.env.PDV_SMOKE || join(app.getPath("appData"), "pdv-sistem"),
+  process.env.PDV_SMOKE || (!app.isPackaged && process.env.PDV_DATA_DIR) || join(app.getPath("appData"), "pdv-sistem"),
 );
 const here = dirname(fileURLToPath(import.meta.url));
 const appIcon = join(here, "../assets/brand/icon-256.png");
 const receiptLogo =
   "data:image/png;base64," + readFileSync(appIcon).toString("base64");
-let store, win, agent, agentPromise, pixTimer;
+let store, win, agent, agentPromise, pixTimer, license;
 const escape = (s) =>
   String(s).replace(
     /[&<>"']/g,
@@ -195,12 +201,33 @@ app
   .whenReady()
   .then(async () => {
     if (process.platform === "win32") app.setAppUserModelId("br.com.pdvsistem");
+    if (!app.requestSingleInstanceLock()) { app.quit(); return; }
     const folder = app.getPath("userData");
+    try {
+      const production = JSON.parse(readFileSync(join(here, "licensing/production.json"), "utf8"));
+      const config = licenseConfig({packaged: app.isPackaged, production});
+      license = new LicenseManager({config, client: new LicenseClient(config),
+        storage: new ProtectedStorage(join(folder, "licensing/session.bin"), safeStorage),
+        authorize: (c, id) => authorization(c, id, (url) => shell.openExternal(url)),
+      });
+      await license.init(); license.start();
+    } catch {
+      license = {
+        status: () => ({authorized:false,status:"configuration_required",message:"Licenciamento não configurado ou cofre indisponível. Consulte as instruções de configuração."}),
+        assertCommercial: () => { throw Error("Configure o licenciamento antes de operar."); },
+        login: async () => { throw Error("Configure a origem do licenciamento antes de entrar."); },
+        check: async () => license.status(), logout: async () => license.status(), stop: async () => {},
+      };
+    }
+    for (const [channel, method] of [["license:status","status"],["license:login","login"],["license:check","check"],["license:logout","logout"]])
+      handle(channel, (event) => { trusted(event); return license[method](); });
     if (existsSync(join(folder, "fiscal", "chave.bin")))
       fiscal().catch((e) => dialog.showErrorBox("Emissor fiscal", e.message));
     mkdirSync(folder, { recursive: true });
     store = new Store(join(folder, "pdv.sqlite"));
+    store.authorize = (action) => checkOperation(license, action);
     pixTimer = setInterval(() => {
+      if (!license.status().authorized) return;
       if (!existsSync(join(app.getPath("userData"), "mercadopago.bin"))) return;
       for (const c of store
         .read()
@@ -219,6 +246,7 @@ app
                 amount: current.amount,
                 email: current.email,
               });
+          license.assertCommercial();
           const updated = recordCharge(current.id, payment);
           if (updated.status === "approved") {
             const previous = store.session;
@@ -261,6 +289,7 @@ app
     });
     handle("pix:configure", async (e, token) => {
       trusted(e);
+      license.assertCommercial();
       const user = store.user(store.read());
       if (user.role !== "admin")
         throw Error("Somente o administrador configura credenciais.");
@@ -286,6 +315,7 @@ app
     });
     handle("pix:create", async (e, checkout, email) => {
       trusted(e);
+      license.assertCommercial();
       const client = await pixClient();
       const charge = reservePix(store, checkout, email);
       return pixLock(charge.id, async () => {
@@ -302,6 +332,7 @@ app
     });
     handle("pix:check", async (e, id) => {
       trusted(e);
+      license.assertCommercial();
       const c = ownCharge(id);
       return pixLock(id, async () => {
         if (c.status === "completed") return pixResult(c);
@@ -314,6 +345,7 @@ app
     });
     handle("pix:cancel", async (e, id) => {
       trusted(e);
+      license.assertCommercial();
       if (pixLocks.has(id)) await pixLocks.get(id);
       const c = ownCharge(id);
       if (c.status === "completed" || c.status === "approved")
@@ -402,6 +434,7 @@ app
     });
     handle("fiscal:fetch", async (e, p) => {
       trusted(e);
+      checkFiscal(license, p.metodo);
       store.user(store.read(), true);
       const url = new URL(p.url, "http://local");
       if (!url.pathname.startsWith("/v1/")) throw Error("Rota não permitida.");
@@ -425,6 +458,7 @@ app
     });
     handle("emit", async (e, id) => {
       trusted(e);
+      license.assertCommercial();
       const payload = store.fiscalPayload(id);
       if (emitting.has(id)) return emitting.get(id);
       const run = (async () => {
@@ -469,6 +503,7 @@ app
     });
     handle("cancelFiscal", async (e, id, justificativa, approval) => {
       trusted(e);
+      license.assertCommercial();
       const state = store.read();
       const actor = store.user(state);
       const authorized = approve(state, actor, { approval });
@@ -604,12 +639,13 @@ app
     win.webContents.on("will-navigate", (e) => e.preventDefault());
     await win.loadFile(join(here, "../dist/index.html"));
     if (process.env.PDV_SMOKE) {
-      await (await import("./smoke.mjs")).smoke(win);
+      if (license.status().authorized) await (await import("./smoke.mjs")).smoke(win);
+      else await (await import("./licensing-smoke.mjs")).licenseSmoke(win);
       app.quit();
     }
   })
   .catch((e) => {
-    console.error(e);
+    console.error("Falha ao iniciar OmniPDV. Os dados locais foram preservados.");
     app.exit(1);
   });
 app.on("window-all-closed", () => app.quit());
@@ -619,7 +655,8 @@ app.on("before-quit", (e) => {
   e.preventDefault();
   closing = true;
   if (pixTimer) clearInterval(pixTimer);
-  Promise.resolve(agentPromise)
+  Promise.resolve(license?.stop())
+    .then(() => agentPromise)
     .catch(() => {})
     .then(() => Promise.allSettled([...pixLocks.values()]))
     .then(() => agent?.parar())

@@ -23,3 +23,10 @@ contextBridge.exposeInMainWorld("pdv", {
 contextBridge.exposeInMainWorld("fiscal", {
   chamar: (pedido) => invoke("fiscal:fetch", pedido),
 });
+
+contextBridge.exposeInMainWorld("license", {
+  status: () => invoke("license:status"),
+  login: () => invoke("license:login"),
+  check: () => invoke("license:check"),
+  logout: () => invoke("license:logout"),
+});

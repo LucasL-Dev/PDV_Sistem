@@ -280,3 +280,7 @@ Administradores podem excluir produtos e funcionários pelo botão **Excluir** d
 Em **Vendas e devoluções**, selecione uma venda e use **Excluir venda**, ou **Excluir vendas do dia** para o dia atual. Confirme na janela que aparece. Os itens ainda não devolvidos voltam ao estoque, e os totais do caixa e relatórios são recalculados. Vendas de caixa já fechado e documentos fiscais ainda não regularizados bloqueiam a exclusão; o lote inteiro é validado antes de qualquer alteração. Cancelamentos/rejeições fiscais não apagam XMLs. Nenhuma dessas opções estorna Pix ou cartão no provedor.
 
 A exclusão remove os registros das telas operacionais, mantendo-os arquivados com autor e data para auditoria e integridade dos vínculos. IDs e números de vendas não são reutilizados.
+
+## Integração de licenciamento (branch de desenvolvimento)
+
+A branch `feat/desktop-subscription-license` exige licença válida no processo principal. O login da assinatura usa passkey no navegador externo; o login dos funcionários permanece local. Consulte o [tutorial de autenticação e teste local](docs/LICENCIAMENTO-DESKTOP.md) para usar o backend em `http://localhost:3000`, sua conta existente e a exportação/recuperação quando a assinatura estiver inativa. A origem de produção ainda precisa ser configurada; não há fallback comercial para localhost. Esta entrega não substitui o instalador publicado.

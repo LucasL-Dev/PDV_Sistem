@@ -114,3 +114,9 @@ test('production forbids localhost and environment overrides; client uses exact 
  const calls=[];const c=new LicenseClient(config,async(url,options)=>{calls.push({url,options});return {ok:true,json:async()=>({})};});await c.exchange({grant_type:'refresh_token',refresh_token:'secret'});await c.status('access');await c.keys();await c.logout('access');
  assert.deepEqual(calls.map(c=>new URL(c.url).pathname),['/api/auth/token','/api/license/status','/.well-known/omnipvd-license-keys.json','/api/auth/logout']);assert.equal(calls[0].options.redirect,'error');assert.equal(JSON.parse(calls[0].options.body).client_id,'omnipvd-desktop');
 });
+
+test('known outage with expired access preserves valid offline authorization without sending refresh',async()=>{
+ const f=await fixture();await f.manager.init();f.advance(601000);let calls=0;
+ f.client.keys=async()=>{throw new LicenseError(0,'network');};f.client.exchange=async()=>{calls++;return f.token();};
+ await f.manager.check();assert.equal(f.manager.status().status,'offline');assert.equal(calls,0);assert.equal(f.storage.get().refreshPending,false);
+});

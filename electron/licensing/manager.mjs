@@ -66,8 +66,10 @@ export class LicenseManager {
       if(!this.data?.session)return this.set('unauthenticated','Entre na sua conta para ativar o OmniPDV.');
       if(this.now()+1000<(this.data.lastTime||0)) {this.data.offline=null;await this.persist();return this.set('reconnect','Relógio regressivo detectado. Reconecte e entre novamente.');}
       if(this.data.refreshPending)return this.set('login_required','Entre novamente para renovar sua sessão com segurança.');
-      if(!this.access)await this.client.keys(); // Connectivity probe before a non-retryable refresh on restart.
-      if(!this.access || this.access.expires<=this.now()+10000)await this.refresh();
+      if(!this.access || this.access.expires<=this.now()+10000) {
+        // A connectivity probe avoids consuming a rotating refresh during a known outage.
+        await this.client.keys(); await this.refresh();
+      }
       let response;
       try {response=await this.client.status(this.access.token);}
       catch(e) { if(e.status!==401)throw e; await this.refresh();response=await this.client.status(this.access.token); }

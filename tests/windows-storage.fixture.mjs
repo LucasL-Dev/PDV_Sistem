@@ -22,4 +22,4 @@ app.whenReady().then(async()=>{
  stage='ciphertext';const ciphertext=await readFile(path);assert.ok(!ciphertext.includes(Buffer.from(expected.refresh_token)));assert.ok(!ciphertext.includes(Buffer.from('session_id')));
  stage='atomic-rename';await assert.rejects(access(path+'.tmp'));
  await diagnostic('ok');console.log('WINDOWS_DPAPI_OK: sessão cifrada, leitura protegida e troca atômica.');window.destroy();app.quit();
-}).catch(async()=>{await diagnostic('failed').catch(()=>{});console.error('WINDOWS_DPAPI_FAILED: '+stage);app.exit(1);});
+}).catch(async()=>{await diagnostic('failed').catch(()=>{});console.error('WINDOWS_DPAPI_FAILED: '+process.env.PDV_STORAGE_TEST_PHASE+' '+stage);app.exit(1);});

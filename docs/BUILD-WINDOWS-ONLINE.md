@@ -79,7 +79,7 @@ Não modifique chave privada ou configurações da VPS para realizar esses passo
 
 O namespace continua **`%APPDATA%\pdv-sistem`**, com `pdv.sqlite` e pasta `fiscal` existentes. O appId `br.com.pdvsistem` e a opção de preservar dados na desinstalação permanecem iguais. Não há migração de banco comercial ou alteração nas regras fiscais nesta branch. Faça o backup usual antes de atualizar; não copie bancos abertos ignorando WAL.
 
-A sessão fica em `licensing\session.bin`, protegida por `safeStorage`/DPAPI do Windows. O access token permanece em memória; o refresh token rotativo não vai para React, logs ou SQLite. Não há fallback para texto puro. O arquivo é substituído atomicamente, e uma renovação incerta exige nova entrada sem repetir o token consumido.
+A sessão fica em `licensing\session.bin`, protegida por `safeStorage`/DPAPI do Windows, usando a API síncrona estável para persistência entre processos. A leitura tenta também o formato assíncrono anterior para preservar sessões legadas que ainda possam ser descriptografadas. O access token permanece em memória; o refresh token rotativo não vai para React, logs ou SQLite. Não há fallback para texto puro. O arquivo é substituído atomicamente, e uma renovação incerta exige nova entrada sem repetir o token consumido.
 
 Uma sessão anterior de desenvolvimento vinculada a localhost não vale como sessão da API pública. Se aparecer mensagem de origem alterada, use **Cancelar entrada / sair da assinatura** e entre pela API. Isso remove somente a sessão de licenciamento local; preserva vendas, estoque e dados fiscais. A revogação da sessão antiga de localhost, se necessária, é feita na conta do ambiente antigo.
 

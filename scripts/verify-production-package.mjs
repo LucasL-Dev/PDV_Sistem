@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { licenseConfig } from '../electron/licensing/config.mjs';
+try {
 const require=createRequire(import.meta.url);
 const builderRequire=createRequire(require.resolve('electron-builder'));
 const resourcesRequire=createRequire(builderRequire.resolve('app-builder-lib'));
@@ -15,11 +16,17 @@ for(const name of files){
  if(asar.statFile(archive,path.slice(1)).files)continue;
  // Reject sensitive file types/test fixtures. Public configuration is allowed.
  if(/\.(pem|key|pfx|p12|sqlite|sqlite-wal|sqlite-shm|db|bin)$/i.test(path)||/(^|\/)\.env($|\.)/.test(path)||/^\/(tests|docs|\.github)\//.test(path))
-   throw Error('Arquivo privado ou de teste encontrado no pacote.');
+   throw Error('Arquivo privado ou de teste encontrado no pacote: '+path);
  if(/\.(mjs|cjs|js|json)$/.test(path) && !path.startsWith('/node_modules/')){
   const text=asar.extractFile(archive,path.slice(1)).toString();
   if(/-----BEGIN (?:[A-Z ]*PRIVATE KEY)-----|(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}|whsec_[A-Za-z0-9]{16,}|re_[A-Za-z0-9]{24,}/.test(text))
-   throw Error('Material de credencial não permitido no pacote.');
+   throw Error('Padrão de credencial encontrado no arquivo: '+path);
  }
 }
 console.log('PRODUCTION_PACKAGE_OK: origem HTTPS pública, ambiente local ignorado e ausência de arquivos privados/fixtures.');
+
+} catch(error) {
+ const message=String(error.message).replaceAll('%','%25').replaceAll('\r','%0D').replaceAll('\n','%0A');
+ console.error('::error title=Production package validation::'+message);
+ process.exitCode=1;
+}

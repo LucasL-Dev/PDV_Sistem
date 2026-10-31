@@ -43,3 +43,16 @@ test('old localhost session never sends its refresh token or offline lease to pu
  await manager.init();assert.equal(manager.status().status,'origin_changed');await manager.check();assert.equal(calls,0);assert.equal(manager.status().authorized,false);assert.equal(saved.length,0);
  await manager.logout();assert.equal(saved.at(-1).origin,'https://api.omnipdv.com.br');assert.equal(saved.at(-1).installation_id,'existing-installation');assert.equal(saved.at(-1).session,undefined);
 });
+test('Windows storage writes with native DPAPI, reads legacy encrypted sessions and refuses an unavailable vault',async()=>{
+ const {ProtectedStorage}=await import('../electron/licensing/storage.mjs');
+ const {mkdtemp,rm,readFile,writeFile}=await import('node:fs/promises');const {join}=await import('node:path');const {tmpdir}=await import('node:os');
+ const {randomBytes,createCipheriv,createDecipheriv}=await import('node:crypto');
+ const dir=await mkdtemp(join(tmpdir(),'omnipdv-native-storage-')),file=join(dir,'session.bin'),key=randomBytes(32);let asyncReads=0;
+ const expected={refresh_token:'synthetic-native-roundtrip'};
+ const safe={isEncryptionAvailable:()=>true,encryptString:plain=>{const iv=randomBytes(12),cipher=createCipheriv('aes-256-gcm',key,iv);return Buffer.concat([iv,cipher.update(plain),cipher.final(),cipher.getAuthTag()]);},decryptString:b=>{const cipher=createDecipheriv('aes-256-gcm',key,b.subarray(0,12));cipher.setAuthTag(b.subarray(-16));return Buffer.concat([cipher.update(b.subarray(12,-16)),cipher.final()]).toString();},decryptStringAsync:async()=>{asyncReads++;return JSON.stringify(expected);}};
+ try {
+  const storage=new ProtectedStorage(file,safe,'win32');await storage.save(expected);assert.deepEqual(await storage.load(),expected);assert.equal(asyncReads,0);assert.ok(!(await readFile(file)).includes(Buffer.from(expected.refresh_token)));
+  await writeFile(file,'synthetic-legacy-ciphertext');assert.deepEqual(await storage.load(),expected);assert.equal(asyncReads,1);
+  await assert.rejects(new ProtectedStorage(file,{isEncryptionAvailable:()=>false},'win32').load());
+ }finally{await rm(dir,{recursive:true,force:true});}
+});

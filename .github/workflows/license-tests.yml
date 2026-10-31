@@ -39,11 +39,23 @@ jobs:
         run: |
           $env:PDV_STORAGE_TEST_DIR = Join-Path $env:RUNNER_TEMP 'omnipdv-dpapi-storage'
           $env:PDV_STORAGE_TEST_PHASE = 'write'
-          pnpm exec electron tests/windows-storage.fixture.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $output = & pnpm exec electron tests/windows-storage.fixture.mjs 2>&1
+          $code = $LASTEXITCODE
+          $output | Write-Output
+          if ($code -ne 0) {
+            $diagnostic = (($output | Out-String) -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A')
+            Write-Output "::error title=DPAPI fixture diagnostic::$diagnostic"
+            exit $code
+          }
           $env:PDV_STORAGE_TEST_PHASE = 'read'
-          pnpm exec electron tests/windows-storage.fixture.mjs
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $output = & pnpm exec electron tests/windows-storage.fixture.mjs 2>&1
+          $code = $LASTEXITCODE
+          $output | Write-Output
+          if ($code -ne 0) {
+            $diagnostic = (($output | Out-String) -replace '%','%25' -replace "`r",'%0D' -replace "`n",'%0A')
+            Write-Output "::error title=DPAPI fixture diagnostic::$diagnostic"
+            exit $code
+          }
       - name: Gerar NSIS x64 somente para validação (sem publicação)
         run: pnpm exec electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never
       - name: Verificar configuração HTTPS e ausência de segredos no pacote

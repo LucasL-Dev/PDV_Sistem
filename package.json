@@ -38,7 +38,9 @@
       "dist/**",
       "electron/**",
       "package.json",
-      "assets/brand/**"
+      "assets/brand/**",
+      "!**/{test,tests,testes,__tests__,fixtures}/**",
+      "!**/*.{pfx,p12,pem,key,sqlite,sqlite-wal,sqlite-shm,db}"
     ],
     "asarUnpack": [
       "**/node_modules/@electric-sql/pglite/**",

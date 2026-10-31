@@ -15,7 +15,7 @@ for(const name of files){
  const path=name.replaceAll('\\','/');
  if(asar.statFile(archive,path.slice(1)).files)continue;
  // Reject sensitive file types/test fixtures. Public configuration is allowed.
- if(/\.(pem|key|pfx|p12|sqlite|sqlite-wal|sqlite-shm|db|bin)$/i.test(path)||/(^|\/)\.env($|\.)/.test(path)||/^\/(tests|docs|\.github)\//.test(path))
+ if(/\.(pem|key|pfx|p12|sqlite|sqlite-wal|sqlite-shm|db|bin)$/i.test(path)||/(^|\/)\.env($|\.)/.test(path)||/\/(?:test|tests|testes|__tests__|fixtures)\//.test(path)||/^\/(docs|\.github)\//.test(path))
    throw Error('Arquivo privado ou de teste encontrado no pacote: '+path);
  if(/\.(mjs|cjs|js|json)$/.test(path) && !path.startsWith('/node_modules/')){
   const text=asar.extractFile(archive,path.slice(1)).toString();

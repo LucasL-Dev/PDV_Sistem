@@ -18,7 +18,7 @@ O arquivo `electron/licensing/production.json` aponta para **`https://api.omnipd
 
 O aplicativo empacotado ignora `OMNIPDV_LICENSE_ORIGIN`, inclusive se configurada como localhost. HTTP e hosts loopback são rejeitados para a API de produção. **O callback `http://127.0.0.1:PORTA/omnipvd/callback` continua necessário pelo protocolo**, limitado à interface local e a uma porta efêmera. Ele não é um backend local e não hospeda o PDV. Não substitua esse callback por uma URL pública.
 
-O JWKS é buscado somente da API configurada, sem redirecionamentos e sem URLs/chaves escolhidas pelo token. A licença offline verifica Ed25519, tipo, issuer, audience, conta, sessão, instalação e validade. Nenhuma chave Ed25519 privada, Stripe ou Resend é incluída no aplicativo.
+O JWKS é buscado somente da API configurada, sem redirecionamentos e sem URLs/chaves escolhidas pelo token. A licença offline verifica Ed25519, tipo, issuer, audience, conta, sessão, instalação e validade. Nenhuma chave Ed25519 privada, Stripe ou Resend é incluída no aplicativo. O empacotamento também exclui diretórios de testes/fixtures das dependências fiscais e certificados/bancos privados, incluindo o certificado PFX sintético de teste do fornecedor. Os certificados fiscais do cliente continuam na pasta de dados externa ao programa.
 
 ## Gerar NSIS x64 no Windows
 

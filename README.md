@@ -283,4 +283,8 @@ A exclusão remove os registros das telas operacionais, mantendo-os arquivados c
 
 ## Integração de licenciamento (branch de desenvolvimento)
 
-A branch `feat/desktop-subscription-license` exige licença válida no processo principal. O login da assinatura usa passkey no navegador externo; o login dos funcionários permanece local. Consulte o [tutorial de autenticação e teste local](docs/LICENCIAMENTO-DESKTOP.md) para usar o backend em `http://localhost:3000`, sua conta existente e a exportação/recuperação quando a assinatura estiver inativa. A origem de produção ainda precisa ser configurada; não há fallback comercial para localhost. Esta entrega não substitui o instalador publicado.
+A branch `feat/desktop-subscription-license` exige licença válida no processo principal. O login da assinatura usa passkey no navegador externo; o login dos funcionários permanece local. Consulte o [tutorial de autenticação e teste local](docs/LICENCIAMENTO-DESKTOP.md) para usar o backend em `http://localhost:3000`, sua conta existente e a exportação/recuperação quando a assinatura estiver inativa. Na branch `feat/windows-online-license`, a origem de produção é `https://api.omnipdv.com.br`; não há fallback comercial para localhost. Esta entrega não substitui o instalador publicado.
+
+### Build Windows com API pública
+
+O [guia do instalador com licenciamento online](docs/BUILD-WINDOWS-ONLINE.md) traz comandos PowerShell para NSIS x64, inspeção do pacote, DPAPI e homologação com `https://api.omnipdv.com.br`. A branch prepara e testa o pacote sem publicar instaladores ou alterar o banco comercial/fiscal.

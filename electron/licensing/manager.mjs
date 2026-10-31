@@ -19,7 +19,7 @@ export class LicenseManager {
   async init() {
     try {
       this.data=await this.storage.load() || {installation_id:randomBytes(24).toString('base64url'),origin:this.config.origin};
-      if(this.data.origin!==this.config.origin)throw Error('A origem da sessão mudou. Saia da conta e entre novamente.');
+      if(this.data.origin!==this.config.origin)return this.set('origin_changed','Sua sessão pertence a outro ambiente. Saia da assinatura e entre novamente na API pública.');
       if(this.now()+1000<(this.data.lastTime||0)) { this.data.offline=null; await this.persist(); return this.set('reconnect','Relógio regressivo detectado. Entre novamente com conexão.'); }
       if(this.data.refreshPending) return this.set('login_required','A renovação anterior foi interrompida. Entre novamente.');
       return await this.check();
@@ -63,6 +63,7 @@ export class LicenseManager {
     if(this.stopped)return this.status();
     try {
       if(this.loginFlight && !this.access)return this.status();
+      if(this.data?.origin!==this.config.origin)return this.set('origin_changed','Sua sessão pertence a outro ambiente. Saia da assinatura e entre novamente.');
       if(!this.data?.session)return this.set('unauthenticated','Entre na sua conta para ativar o OmniPDV.');
       if(this.now()+1000<(this.data.lastTime||0)) {this.data.offline=null;await this.persist();return this.set('reconnect','Relógio regressivo detectado. Reconecte e entre novamente.');}
       if(this.data.refreshPending)return this.set('login_required','Entre novamente para renovar sua sessão com segurança.');

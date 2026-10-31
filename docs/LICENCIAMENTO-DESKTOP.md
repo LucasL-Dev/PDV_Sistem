@@ -86,9 +86,9 @@ O Pix pendente é preservado ao bloquear licença. A consulta automática e a fi
 
 ## Produção HTTPS: configuração separada
 
-`electron/licensing/production.json` contém apenas a origem pública de produção, inicialmente `null`. A ausência de origem bloqueia o comercial; **não existe localhost padrão no instalador**. A variável `OMNIPDV_LICENSE_ORIGIN` funciona somente em desenvolvimento e é ignorada pelo aplicativo empacotado.
+`electron/licensing/production.json` contém a origem pública `https://api.omnipdv.com.br` na branch `feat/windows-online-license`. A ausência de origem bloqueia o comercial; **não existe localhost padrão no instalador**. A variável `OMNIPDV_LICENSE_ORIGIN` funciona somente em desenvolvimento e é ignorada pelo aplicativo empacotado.
 
-Quando o domínio estável estiver confirmado, configure `{"origin":"https://seu-dominio-real"}` no processo de preparação/revisão do build. Não use o exemplo como domínio real. O JWKS é buscado exclusivamente em `/.well-known/omnipvd-license-keys.json` dessa origem, com HTTPS, sem redirecionamentos; o token não escolhe a URL/chave de confiança. O JWKS validado e a autorização assinada ficam no armazenamento protegido para uso offline. Planeje a rotação de chaves no backend conforme a documentação dele.
+A landing comercial `https://omnipdv.com.br` é separada da API. O JWKS é buscado exclusivamente em `/.well-known/omnipvd-license-keys.json` da origem HTTPS da API, sem redirecionamentos. Consulte [BUILD-WINDOWS-ONLINE.md](BUILD-WINDOWS-ONLINE.md) para os comandos exatos do instalador e a compatibilidade com `feat/production-integration`.
 
 Somente origem e chaves **públicas** pertencem ao cliente. Nunca incluir chave Ed25519 privada, chave Stripe, Resend, tokens reais ou certificado fiscal na configuração do desktop. Nenhum instalador ou release é gerado por esta branch/CI de testes.
 

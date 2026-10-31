@@ -2,7 +2,7 @@ name: Testes do licenciamento desktop
 on:
   pull_request:
   push:
-    branches: [feat/desktop-subscription-license]
+    branches: [feat/desktop-subscription-license, feat/windows-online-license]
 permissions:
   contents: read
 jobs:
@@ -33,3 +33,28 @@ jobs:
           $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'omnipdv-licensed-ui'
           pnpm exec electron tests/desktop-licensed.fixture.mjs
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verificar armazenamento DPAPI entre processos Windows
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $env:PDV_STORAGE_TEST_DIR = Join-Path $env:RUNNER_TEMP 'omnipdv-dpapi-storage'
+          $env:PDV_STORAGE_TEST_PHASE = 'write'
+          pnpm exec electron tests/windows-storage.fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:PDV_STORAGE_TEST_PHASE = 'read'
+          pnpm exec electron tests/windows-storage.fixture.mjs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Gerar NSIS x64 somente para validação (sem publicação)
+        run: pnpm exec electron-builder --config electron-builder.config.cjs --win nsis --x64 --publish never
+      - name: Verificar configuração HTTPS e ausência de segredos no pacote
+        run: node scripts/verify-production-package.mjs
+      - name: Verificar ícone Windows
+        run: node scripts/verify-windows-icon.mjs
+      - name: Testar bloqueio no aplicativo empacotado com variável localhost ignorada
+        timeout-minutes: 3
+        shell: pwsh
+        run: |
+          $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'omnipdv-packaged-online'
+          $env:OMNIPDV_LICENSE_ORIGIN = 'http://localhost:3000'
+          $process = Start-Process -FilePath '.\release\win-unpacked\OmniPDV.exe' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { exit $process.ExitCode }

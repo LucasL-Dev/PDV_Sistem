@@ -37,6 +37,8 @@ jobs:
         timeout-minutes: 3
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Continue'
+          $PSNativeCommandUseErrorActionPreference = $false
           $env:PDV_STORAGE_TEST_DIR = Join-Path $env:RUNNER_TEMP 'omnipdv-dpapi-storage'
           $env:PDV_STORAGE_TEST_PHASE = 'write'
           $output = & pnpm exec electron tests/windows-storage.fixture.mjs 2>&1

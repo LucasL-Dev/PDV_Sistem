@@ -1,9 +1,10 @@
+import { AuthorizationError, loginFailure } from './errors.mjs';
 import { randomBytes } from 'node:crypto';
 import { verifyOffline } from './offline.mjs';
 export class LicenseManager {
   constructor({config, client, storage, authorize, now=()=>Date.now()}) {
     Object.assign(this,{config,client,storage,authorize,now});
-    this.state={status:'checking',authorized:false}; this.access=null; this.data=null; this.stopped=false; this.wallAnchor=this.now(); this.monoAnchor=performance.now();
+    this.state={status:'checking',authorized:false,message:'Verificando sua sessão e licença…'}; this.access=null; this.data=null; this.stopped=false; this.wallAnchor=this.now(); this.monoAnchor=performance.now();
   }
   set(status,message,authorized=false,until=null) { this.state={status,message,authorized,expiresAt:until}; return this.status(); }
   status() {
@@ -67,6 +68,8 @@ export class LicenseManager {
       if(!this.data?.session)return this.set('unauthenticated','Entre na sua conta para ativar o OmniPDV.');
       if(this.now()+1000<(this.data.lastTime||0)) {this.data.offline=null;await this.persist();return this.set('reconnect','Relógio regressivo detectado. Reconecte e entre novamente.');}
       if(this.data.refreshPending)return this.set('login_required','Entre novamente para renovar sua sessão com segurança.');
+      const previous=this.status();
+      this.set('verifying','Verificando sua licença…',previous.authorized,previous.expiresAt);
       if(!this.access || this.access.expires<=this.now()+10000) {
         // A connectivity probe avoids consuming a rotating refresh during a known outage.
         await this.client.keys(); await this.refresh();
@@ -103,25 +106,48 @@ export class LicenseManager {
     }
   }
   async login() {
+    if(this.loginFlight && this.loginAttempt?.cancelled)await this.loginFlight;
     if(this.loginFlight)return this.loginFlight;
     this.loginFlight=this.performLogin().finally(()=>{this.loginFlight=null;});return this.loginFlight;
   }
   async performLogin() {
-    if(this.flight)await this.flight;
-    if(!this.data)this.data={installation_id:randomBytes(24).toString('base64url'),origin:this.config.origin};
-    if(this.data.origin!==this.config.origin)throw Error('Saia da conta antes de alterar a origem.');
-    await this.persist();
-    const flow=await this.authorize(this.config,this.data.installation_id);this.flow=flow;
+    const attempt={cancelled:false,phase:'opening'};this.loginAttempt=attempt;
+    this.set('opening_browser','Preparando a entrada no navegador…');
+    let flow;
     try {
+      if(this.flight)await this.flight;
+      if(attempt.cancelled)throw new AuthorizationError('authorization_cancelled');
+      if(!this.data)this.data={installation_id:randomBytes(24).toString('base64url'),origin:this.config.origin};
+      if(this.data.origin!==this.config.origin)return this.set('origin_changed','Sua sessão pertence a outro ambiente. Saia da assinatura e entre novamente.');
+      await this.persist();
+      if(attempt.cancelled)throw new AuthorizationError('authorization_cancelled');
+      flow=await this.authorize(this.config,this.data.installation_id);this.flow=flow;attempt.flow=flow;
+      if(attempt.cancelled)flow.cancel();
+      else {
+        attempt.phase='browser';
+        this.set('waiting_browser','Continue no navegador: informe o e-mail da compra, confirme o código e autorize este aplicativo. Se preferir, use sua passkey disponível.');
+      }
       const grant=await flow.result;
+      if(attempt.cancelled)throw new AuthorizationError('authorization_cancelled');
+      attempt.phase='verifying';this.set('verifying','Entrada recebida. Verificando sua licença…');
       const result=await this.client.exchange(grant);
       this.accept(result);this.data.offline=null;this.data.refreshPending=false;await this.persist();
       this.completingLogin=true; return await this.check();
-    } catch {return this.set('login_required','Não foi possível concluir a entrada. Tente novamente no navegador.');}
-    finally {this.completingLogin=false;flow.cancel();this.flow=null;}
+    } catch(error) {
+      const [status,message]=loginFailure(error);return this.set(status,message);
+    } finally {
+      this.completingLogin=false;flow?.cancel();this.flow=null;
+      if(this.loginAttempt===attempt)this.loginAttempt=null;
+    }
+  }
+  cancelLogin() {
+    const attempt=this.loginAttempt;
+    if(attempt?.phase==='verifying')return this.status();
+    if(attempt){attempt.cancelled=true;attempt.flow?.cancel();}
+    return this.set('cancelled','Autenticação cancelada. Seus dados e sessões existentes foram preservados.');
   }
   async logout() {
-    this.flow?.cancel(); if(this.loginFlight)await this.loginFlight;
+    this.cancelLogin(); if(this.loginFlight)await this.loginFlight;
     if(this.flight)await this.flight;
     this.set('unauthenticated','Entre na sua conta para ativar o OmniPDV.');
     let revoked=true;
@@ -129,6 +155,6 @@ export class LicenseManager {
     this.access=null;this.data={installation_id:this.data?.installation_id||randomBytes(24).toString('base64url'),origin:this.config.origin};await this.persist();
     return this.set('unauthenticated',revoked?'Sessão removida deste aplicativo.':'Sessão removida localmente. Sem conexão, revogue também em sua conta no navegador.');
   }
-  start() { this.timer=setInterval(()=>{if(!this.loginFlight && (this.now()>=(this.nextCheck||0) || !this.status().authorized))this.check().catch(()=>{});},30000);this.timer.unref(); }
-  async stop() {this.stopped=true;clearInterval(this.timer);this.flow?.cancel();await Promise.allSettled([this.flight,this.loginFlight]);if(this.data)await this.persist().catch(()=>{});}
+  start() { this.timer=setInterval(()=>{if(!this.loginFlight && (this.data?.session || this.state.authorized) && (this.now()>=(this.nextCheck||0) || !this.status().authorized))this.check().catch(()=>{});},30000);this.timer.unref(); }
+  async stop() {this.stopped=true;clearInterval(this.timer);this.cancelLogin();await Promise.allSettled([this.flight,this.loginFlight]);if(this.data)await this.persist().catch(()=>{});}
 }

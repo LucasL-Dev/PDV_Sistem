@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld("fiscal", {
 contextBridge.exposeInMainWorld("license", {
   status: () => invoke("license:status"),
   login: () => invoke("license:login"),
+  cancel: () => invoke("license:cancel"),
   check: () => invoke("license:check"),
   logout: () => invoke("license:logout"),
 });

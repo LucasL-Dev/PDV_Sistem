@@ -1,3 +1,4 @@
+import { registerLicenseHandlers } from './licensing/ipc.mjs';
 import { licenseConfig } from "./licensing/config.mjs";
 import { LicenseClient } from "./licensing/client.mjs";
 import { LicenseManager } from "./licensing/manager.mjs";
@@ -33,6 +34,7 @@ const appIcon = join(here, "../assets/brand/icon-256.png");
 const receiptLogo =
   "data:image/png;base64," + readFileSync(appIcon).toString("base64");
 let store, win, agent, agentPromise, pixTimer, license;
+let licenseReady=Promise.resolve();
 const escape = (s) =>
   String(s).replace(
     /[&<>"']/g,
@@ -210,17 +212,16 @@ app
         storage: new ProtectedStorage(join(folder, "licensing/session.bin"), safeStorage),
         authorize: (c, id) => authorization(c, id, (url) => shell.openExternal(url)),
       });
-      await license.init(); license.start();
+      licenseReady=license.init().then(()=>{if(!license.stopped)license.start();});
     } catch {
       license = {
         status: () => ({authorized:false,status:"configuration_required",message:"Licenciamento não configurado ou cofre indisponível. Consulte as instruções de configuração."}),
         assertCommercial: () => { throw Error("Configure o licenciamento antes de operar."); },
         login: async () => { throw Error("Configure a origem do licenciamento antes de entrar."); },
-        check: async () => license.status(), logout: async () => license.status(), stop: async () => {},
+        cancelLogin: async () => license.status(), check: async () => license.status(), logout: async () => license.status(), stop: async () => {},
       };
     }
-    for (const [channel, method] of [["license:status","status"],["license:login","login"],["license:check","check"],["license:logout","logout"]])
-      handle(channel, (event) => { trusted(event); return license[method](); });
+    registerLicenseHandlers({handle,trusted,license,ready:licenseReady});
     if (existsSync(join(folder, "fiscal", "chave.bin")))
       fiscal().catch((e) => dialog.showErrorBox("Emissor fiscal", e.message));
     mkdirSync(folder, { recursive: true });
@@ -639,6 +640,7 @@ app
     win.webContents.on("will-navigate", (e) => e.preventDefault());
     await win.loadFile(join(here, "../dist/index.html"));
     if (process.env.PDV_SMOKE) {
+      await licenseReady;
       if (license.status().authorized) await (await import("./smoke.mjs")).smoke(win);
       else await (await import("./licensing-smoke.mjs")).licenseSmoke(win);
       app.quit();

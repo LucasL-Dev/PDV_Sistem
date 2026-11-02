@@ -2,7 +2,7 @@ name: Testes do licenciamento desktop
 on:
   pull_request:
   push:
-    branches: [feat/desktop-subscription-license, feat/windows-online-license]
+    branches: [feat/desktop-subscription-license, feat/windows-online-license, feat/email-otp-desktop-login]
 permissions:
   contents: read
 jobs:
@@ -26,6 +26,9 @@ jobs:
           $env:PDV_SMOKE = Join-Path $env:RUNNER_TEMP 'omnipdv-license-smoke'
           pnpm exec electron .
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Testar botões Entrar e Ativar, navegador, cancelamento e licença
+        timeout-minutes: 3
+        run: pnpm exec electron tests/desktop-email-login.fixture.mjs
       - name: Testar interface comercial com licença sintética válida e DPAPI
         timeout-minutes: 3
         shell: pwsh

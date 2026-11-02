@@ -288,3 +288,7 @@ A branch `feat/desktop-subscription-license` exige licença válida no processo 
 ### Build Windows com API pública
 
 O [guia do instalador com licenciamento online](docs/BUILD-WINDOWS-ONLINE.md) traz comandos PowerShell para NSIS x64, inspeção do pacote, DPAPI e homologação com `https://api.omnipdv.com.br`. A branch prepara e testa o pacote sem publicar instaladores ou alterar o banco comercial/fiscal.
+
+### Login por e-mail e código temporário
+
+A branch `feat/email-otp-desktop-login` corrige os botões de entrada/ativação e reutiliza o PKCE/licenciamento existente. O navegador da API cuida do OTP, quando habilitado no backend, mantendo a alternativa passkey. Veja [EMAIL-OTP-DESKTOP.md](docs/EMAIL-OTP-DESKTOP.md) para estados, cancelamento sem apagar sessões, testes e comandos do instalador Windows. Não há envio de OTP pelo Electron nem deploy/habilitação de serviço nesta entrega.

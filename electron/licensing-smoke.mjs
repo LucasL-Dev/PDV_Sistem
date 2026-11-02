@@ -20,7 +20,5 @@ export async function licenseSmoke(win) {
   if(snapshot.products.length || snapshot.shifts.length || snapshot.sales.length)throw Error('Bloqueio alterou dados comerciais.');
   await js("Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('Relatórios')).click()");
   await wait("document.body.innerText.includes('Exportar Excel')");
-  await js("Array.from(document.querySelectorAll('button')).find(b=>b.textContent.includes('Ativar assinatura')).click()");
-  await wait("document.body.innerText.includes('Entrar na minha conta')");
   console.log('PDV_LICENSE_SMOKE_OK: ativação, recuperação, autenticação local, bloqueio IPC e preservação.');
 }
